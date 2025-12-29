@@ -5,7 +5,8 @@ import '../../core/app_theme.dart';
 import '../../core/constants.dart';
 import '../../auth/auth_controller.dart';
 import 'cart_controller.dart';
-import 'product_page.dart'; // To access productListProvider
+import 'product_page.dart'; 
+import '../../shared/models/product.dart';
 
 class CartPage extends ConsumerStatefulWidget {
   const CartPage({super.key});
@@ -15,7 +16,7 @@ class CartPage extends ConsumerStatefulWidget {
 }
 
 class _CartPageState extends ConsumerState<CartPage> {
-  final _adminNotesController = TextEditingController(); // Actually USER notes for Admin
+  final _adminNotesController = TextEditingController(); 
   bool _isSubmitting = false;
 
   @override
@@ -35,91 +36,139 @@ class _CartPageState extends ConsumerState<CartPage> {
       appBar: AppBar(title: const Text("Review Request")),
       body: productsAsync.when(
         data: (allProducts) {
-          // Filter products in cart
-          final cartProducts = allProducts.where((p) => cart.items.containsKey(p.id)).toList();
-          
-          double estimatedTotal = 0;
-          for (var p in cartProducts) {
-            estimatedTotal += p.pricePerUnit * (cart.items[p.id] ?? 0);
-          }
+          try {
+            // Flatten all variants
+            final variantToProductMap = <String, Product>{};
+            // Map to store the specific variant object too for easier lookup
+            final variantMap = <String, ProductVariant>{};
 
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: cartProducts.length,
-                  separatorBuilder: (c, i) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final product = cartProducts[index];
-                    final qty = cart.items[product.id] ?? 0;
-                    final total = product.pricePerUnit * qty;
+            for (var p in allProducts) {
+              for (var v in p.variants) {
+                variantToProductMap[v.id] = p;
+                variantMap[v.id] = v;
+              }
+            }
 
-                    return ListTile(
-                      leading: Image.network(
-                        product.imageUrl.isNotEmpty ? product.imageUrl : Constants.defaultTeaImage,
-                        width: 50, height: 50, fit: BoxFit.cover,
-                      ),
-                      title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text("${Constants.currencySymbol}${product.pricePerUnit} x $qty ${product.unitType}"),
-                      trailing: Text(
-                        "${Constants.currencySymbol}${total.toStringAsFixed(2)}",
-                        style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black12, offset: Offset(0, -2))],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Estimated Total:", style: TextStyle(fontSize: 16)),
-                        Text(
-                          "${Constants.currencySymbol}${estimatedTotal.toStringAsFixed(2)}",
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
+            // Filter cart items to only show VALID ones
+            final validCartItems = cart.items.entries.where((e) {
+               return variantMap.containsKey(e.key);
+            }).toList();
+            
+            if (validCartItems.isEmpty) {
+               return Center(
+                 child: Column(
+                   mainAxisAlignment: MainAxisAlignment.center,
+                   children: [
+                     const Text("Items in cart are no longer available."),
+                     const SizedBox(height: 16),
+                     FilledButton(
+                       onPressed: () => ref.read(cartProvider.notifier).clear(),
+                       child: const Text("Clear Cart"),
+                     )
+                   ],
+                 )
+               );
+            }
+
+            double estimatedTotal = 0;
+            for (var e in validCartItems) {
+              final variant = variantMap[e.key];
+              if (variant != null) {
+                estimatedTotal += variant.price * e.value;
+              }
+            }
+
+            return Column(
+              children: [
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: validCartItems.length,
+                    separatorBuilder: (c, i) => const Divider(),
+                    itemBuilder: (context, index) {
+                      final entry = validCartItems[index];
+                      final variantId = entry.key;
+                      final qty = entry.value;
+                      
+                      final product = variantToProductMap[variantId];
+                      final variant = variantMap[variantId];
+
+                      // Defensive Check (should satisfy due to filter above, but safe is better)
+                      if (product == null || variant == null) {
+                        return const SizedBox.shrink(); 
+                      }
+
+                      final total = variant.price * qty;
+
+                      return ListTile(
+                        leading: _ProductThumbnail(imageUrl: product.imageUrl),
+                        title: Text("${product.name} (${variant.variantName})", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text("${Constants.currencySymbol}${variant.price.toStringAsFixed(0)} x $qty"),
+                        trailing: Text(
+                          "${Constants.currencySymbol}${total.toStringAsFixed(0)}",
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _adminNotesController,
-                      decoration: const InputDecoration(
-                        labelText: "Notes for Admin (Optional)",
-                        hintText: "E.g. Deliver by next Monday",
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _isSubmitting ? null : () => _submitOrder(estimatedTotal, userProfile?['id']),
-                      child: _isSubmitting 
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("SUBMIT REQUEST"),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
-          );
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black12, offset: Offset(0, -2))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Estimated Total:", style: TextStyle(fontSize: 16)),
+                          Text(
+                            "${Constants.currencySymbol}${estimatedTotal.toStringAsFixed(2)}",
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _adminNotesController,
+                        decoration: const InputDecoration(
+                          labelText: "Notes (Optional)",
+                          hintText: "E.g. Deliver by next Monday",
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 24),
+                      FilledButton(
+                        onPressed: _isSubmitting ? null : () => _submitOrder(estimatedTotal, userProfile?['id'], variantMap),
+                        child: _isSubmitting 
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text("SUBMIT REQUEST"),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          } catch (e, stack) {
+             debugPrint("Cart Build Error: $e $stack");
+             return Center(child: Text("Error displaying cart: $e"));
+          }
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text("Error: $e")),
+        error: (e, s) {
+          debugPrint("CartPage Error: $e");
+          return Center(child: Text("Error loading catalog: $e")); 
+        },
       ),
     );
   }
 
-  Future<void> _submitOrder(double totalAmount, String? userId) async {
+  Future<void> _submitOrder(double totalAmount, String? userId, Map<String, ProductVariant> variantMap) async {
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User ID not found")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User ID not found. Please Login.")));
       return;
     }
 
@@ -133,31 +182,31 @@ class _CartPageState extends ConsumerState<CartPage> {
         'user_id': userId,
         'status': 'requested',
         'total_amount': totalAmount,
-        'admin_notes': _adminNotesController.text, // Using this field for User Notes initially? Or add 'user_notes'? 
-        // Schema has 'admin_notes'. Let's assume admin_notes is predominantly for admin. 
-        // Maybe I should have added 'user_notes'. For now, I'll put it in admin_notes with prefix "User Note:"
+        'admin_notes': _adminNotesController.text, 
       }).select().single();
 
       final orderId = orderRes['id'];
 
-      // 2. Create Order Items
-      final itemsToInsert = cart.items.entries.map((entry) {
-        // Need to find product price again? Or rely on UI? Best to fetch or pass.
-        // For simplicity, we assume price hasn't changed in last 2 seconds.
-        // We need product list to get price.
-        // In a real app we'd fetch prices on backend or re-verify.
-        final productList = ref.read(productListProvider).value!; 
-        final product = productList.firstWhere((p) => p.id == entry.key);
-
-        return {
+      // 2. Create Order Items (Only valid ones)
+      final itemsToInsert = <Map<String, dynamic>>[];
+      
+      for (var entry in cart.items.entries) {
+        if (!variantMap.containsKey(entry.key)) continue; 
+        
+        final variantId = entry.key;
+        final variant = variantMap[variantId]!;
+        
+        itemsToInsert.add({
           'order_id': orderId,
-          'product_id': entry.key,
+          'product_id': variantId, 
           'quantity': entry.value,
-          'unit_price': product.pricePerUnit,
-        };
-      }).toList();
+          'unit_price': variant.price,
+        });
+      }
 
-      await SupabaseConfig.client.from('tea_order_items').insert(itemsToInsert);
+      if (itemsToInsert.isNotEmpty) {
+        await SupabaseConfig.client.from('tea_order_items').insert(itemsToInsert);
+      }
 
       // 3. Clear Cart & Success
       ref.read(cartProvider.notifier).clear();
@@ -169,9 +218,6 @@ class _CartPageState extends ConsumerState<CartPage> {
             backgroundColor: Colors.green,
           )
         );
-        // Switch to Orders Tab (index 2)
-        // Need access to vipNavIndexProvider? It sits up the tree. 
-        // We can just rely on user going there.
       }
 
     } catch (e) {
@@ -181,5 +227,36 @@ class _CartPageState extends ConsumerState<CartPage> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+}
+
+class _ProductThumbnail extends StatelessWidget {
+  final String imageUrl;
+  const _ProductThumbnail({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl.isEmpty) {
+      return _itemsPlaceholder();
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.network(
+        imageUrl,
+        width: 50,
+        height: 50,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _itemsPlaceholder(),
+      ),
+    );
+  }
+
+  Widget _itemsPlaceholder() {
+    return Container(
+      width: 50,
+      height: 50,
+      color: Colors.grey[200],
+      child: const Icon(Icons.local_cafe, size: 20, color: Colors.grey),
+    );
   }
 }

@@ -12,7 +12,8 @@ import '../../services/invoice_service.dart';
 final vipOrderDetailProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, orderId) async {
   return SupabaseConfig.client
       .from('tea_orders')
-      .select('*, tea_order_items(*, products(name, image_url)), users:user_id(*)')
+      // Deep select: items -> product_variants -> products
+      .select('*, tea_order_items(*, product_variants(*, products(*))), users:user_id(*)')
       .eq('id', orderId)
       .single();
 });
@@ -47,11 +48,11 @@ class VipOrderDetailPage extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                         Text("Order #${order['id'].split('-')[0]}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                         Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), style: TextStyle(color: Colors.grey)),
+                         Text("Order #${order['id'].split('-')[0]}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                         Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), style: const TextStyle(color: Colors.grey)),
                          const SizedBox(height: 12),
                          _buildStatusBadge(status),
-                         if (order['admin_notes'] != null) ...[
+                         if (order['admin_notes'] != null && order['admin_notes'].isNotEmpty) ...[
                            const SizedBox(height: 12),
                            Text("Admin Note: ${order['admin_notes']}", style: TextStyle(color: Colors.grey[700], fontStyle: FontStyle.italic)),
                          ]
@@ -71,14 +72,24 @@ class VipOrderDetailPage extends ConsumerWidget {
                   separatorBuilder: (c, i) => const Divider(),
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final product = item['products'];
+                    // Handle nested data
+                    final variant = item['product_variants'];
+                    final product = variant?['products'];
+                    
+                    final name = product?['name'] ?? 'Unknown Tea';
+                    final variantName = variant?['variant_name'] ?? '';
+                    final imageUrl = product?['image_url'];
+
                     return ListTile(
-                      leading: Image.network(
-                         product['image_url'] ?? Constants.defaultTeaImage,
-                         width: 40, height: 40, fit: BoxFit.cover,
-                         errorBuilder: (c,o,s) => Container(width: 40, height: 40, color: Colors.grey[200]),
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                           imageUrl ?? Constants.defaultTeaImage,
+                           width: 40, height: 40, fit: BoxFit.cover,
+                           errorBuilder: (c,o,s) => Container(width: 40, height: 40, color: Colors.grey[200]),
+                        ),
                       ),
-                      title: Text(product['name']),
+                      title: Text("$name ($variantName)"),
                       subtitle: Text("${item['quantity']} pack(s)"),
                       trailing: Text("${Constants.currencySymbol}${item['unit_price']}"),
                     );
@@ -103,8 +114,12 @@ class VipOrderDetailPage extends ConsumerWidget {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Generating Invoice...")));
                         
                         final itemsList = items.map((i) {
+                           final variant = i['product_variants'];
+                           final product = variant?['products'];
+                           final name = "${product?['name'] ?? 'Tea'} ${variant?['variant_name'] ?? ''}";
+
                           return {
-                            'name': i['products']['name'],
+                            'name': name,
                             'quantity': i['quantity'],
                             'unit_price': i['unit_price'],
                             'total': (i['quantity'] * i['unit_price']).toStringAsFixed(2),

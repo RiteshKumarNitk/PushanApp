@@ -4,15 +4,16 @@ import 'package:intl/intl.dart';
 import '../../core/supabase_config.dart';
 import '../../core/app_theme.dart';
 import '../../core/constants.dart';
-import '../../services/invoice_service.dart'; // Add this
-import 'package:printing/printing.dart'; // Add this
-import 'package:pdf/pdf.dart'; // Add this
+import '../../services/invoice_service.dart'; 
+import 'package:printing/printing.dart'; 
+import 'package:pdf/pdf.dart'; 
 
 final orderDetailProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, orderId) async {
-  // Fetch Order + Items + User
+  // Fetch Order + Items + User + Variants + Products
   final orderRes = await SupabaseConfig.client
       .from('tea_orders')
-      .select('*, tea_order_items(*, products(*)), users:user_id(*)')
+      // Deep select: items -> product_variants -> products
+      .select('*, tea_order_items(*, product_variants(*, products(*))), users:user_id(*)')
       .eq('id', orderId)
       .single();
   
@@ -49,11 +50,35 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
               children: [
                 // User Info Card
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.person),
-                    title: Text(user['full_name'] ?? 'User'),
-                    subtitle: Text("${user['business_name'] ?? ''}\n${user['email']}"),
-                    isThreeLine: true,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                         ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.person, size: 32),
+                          title: Text(user['full_name'] ?? 'User', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("${user['business_name'] ?? ''}\n${user['email']}"),
+                          isThreeLine: true,
+                        ),
+                        const Divider(),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.location_on, color: Colors.indigo),
+                          title: const Text("Shipping Address", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                          subtitle: SelectableText( 
+                            user['address'] ?? 'No address provided by user.',
+                            style: const TextStyle(fontSize: 15, color: Colors.black87),
+                          ),
+                        ),
+                        if (user['phone_number'] != null)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.phone, color: Colors.green),
+                            title: SelectableText(user['phone_number']),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -71,10 +96,17 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final product = item['products'];
+                    // Handle nested data
+                    // product_variants might be null if FK failed join, hopefully not.
+                    final variant = item['product_variants'];
+                    final product = variant?['products'];
+                    
+                    final productName = product?['name'] ?? 'Unknown Tea';
+                    final variantName = variant?['variant_name'] ?? '';
+
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text(product['name']),
+                      title: Text("$productName ($variantName)"),
                       subtitle: Text("${item['quantity']} units x ${Constants.currencySymbol}${item['unit_price']}"),
                       trailing: Text(
                         "${Constants.currencySymbol}${(item['quantity'] * item['unit_price'])}",
@@ -93,7 +125,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                 ),
                 
                 const SizedBox(height: 32),
-                // Invoice Generation (Placeholder for now)
+                // Invoice Generation
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -101,11 +133,13 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                       try {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Generating Invoice...")));
                         
-                        // Items are already loaded in 'items' list from the Stream/Future builder
-                        // We need to map them to the format expected by InvoiceService
                         final itemsList = items.map((i) {
+                          final variant = i['product_variants'];
+                          final product = variant?['products'];
+                          final name = "${product?['name'] ?? 'Tea'} ${variant?['variant_name'] ?? ''}";
+
                           return {
-                            'name': i['products']['name'],
+                            'name': name,
                             'quantity': i['quantity'],
                             'unit_price': i['unit_price'],
                             'total': (i['quantity'] * i['unit_price']).toStringAsFixed(2),

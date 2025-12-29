@@ -1,50 +1,75 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/supabase_config.dart';
 import '../../core/app_theme.dart';
+import '../../shared/models/product.dart';
 
-class AdminAddProductPage extends StatefulWidget {
-  const AdminAddProductPage({super.key});
+class EditProductPage extends StatefulWidget {
+  final Product product;
+  const EditProductPage({super.key, required this.product});
 
   @override
-  State<AdminAddProductPage> createState() => _AdminAddProductPageState();
+  State<EditProductPage> createState() => _EditProductPageState();
 }
 
-class _AdminAddProductPageState extends State<AdminAddProductPage> {
+class _EditProductPageState extends State<EditProductPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  final _categoryCtrl = TextEditingController(text: "Tea");
+  late TextEditingController _nameCtrl;
+  late TextEditingController _descCtrl;
+  late TextEditingController _categoryCtrl;
   
-  // Variants (We will start with one default variant)
-  final List<Map<String, TextEditingController>> _variants = [
-    {
-      'name': TextEditingController(text: '250g'),
-      'price': TextEditingController(),
-    }
-  ];
+  // Variants (We allow editing existing ones and adding new ones)
+  // We need to track IDs for existing ones to update them
+  late List<Map<String, dynamic>> _variants;
 
   XFile? _pickedImage;
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.product.name);
+    _descCtrl = TextEditingController(text: widget.product.description);
+    _categoryCtrl = TextEditingController(text: widget.product.category);
+    
+    _variants = widget.product.variants.map((v) {
+      return {
+        'id': v.id, // Keep ID to update existing
+        'name': TextEditingController(text: v.variantName),
+        'price': TextEditingController(text: v.price.toStringAsFixed(0)),
+        'is_new': false,
+        'is_deleted': false, 
+      };
+    }).toList();
+
+    if (_variants.isEmpty) {
+       _addVariant(); // Ensure at least one
+    }
+  }
+
   void _addVariant() {
     setState(() {
       _variants.add({
+        'id': null,
         'name': TextEditingController(),
         'price': TextEditingController(),
+        'is_new': true,
+        'is_deleted': false, 
       });
     });
   }
 
   void _removeVariant(int index) {
-    if (_variants.length > 1) {
       setState(() {
-        _variants.removeAt(index);
+        if (_variants[index]['is_new']) {
+           _variants.removeAt(index);
+        } else {
+           // For existing ones, mark as deleted so we can delete from DB
+           _variants[index]['is_deleted'] = true;
+        }
       });
-    }
   }
 
   Future<void> _pickImage() async {
@@ -59,19 +84,19 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
     }
   }
 
-  Future<void> _saveProduct() async {
+  Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
     try {
-      String? imageUrl;
+      String? imageUrl = widget.product.imageUrl;
 
-      // 1. Upload Image (If selected)
+      // 1. Upload New Image (If selected)
       if (_pickedImage != null) {
         try {
           final bytes = await _pickedImage!.readAsBytes();
           final fileExt = _pickedImage!.name.split('.').last;
-          final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+          final fileName = 'updated_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
           
           await SupabaseConfig.client.storage
               .from('product-images')
@@ -80,43 +105,43 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
           imageUrl = SupabaseConfig.client.storage
               .from('product-images')
               .getPublicUrl(fileName);
-        } catch(e) {
-          debugPrint("Image upload failed: $e");
-          // Continue without image? or fail? Let's just log and continue for now with default
-        }
+        } catch(e) { /* ignore upload errors */ }
       }
 
-      // 2. Insert Product
-      final productRes = await SupabaseConfig.client.from('products').insert({
+      // 2. Update Product Info
+      await SupabaseConfig.client.from('products').update({
         'name': _nameCtrl.text,
         'description': _descCtrl.text,
         'category': _categoryCtrl.text,
-        'price_per_unit': 0, // Legacy field, just put 0
-        'min_order_quantity': 1,
-        'unit_type': 'varies',
         'image_url': imageUrl,
-        'is_active': true,
-      }).select().single();
+      }).eq('id', widget.product.id);
 
-      final productId = productRes['id'];
+      // 3. Handle Variants (Upsert/Delete)
+      for (var v in _variants) {
+        if (v['is_deleted'] == true) {
+          if (v['id'] != null) {
+            await SupabaseConfig.client.from('product_variants').delete().eq('id', v['id']);
+          }
+        } else {
+          final data = {
+            'product_id': widget.product.id,
+            'variant_name': (v['name'] as TextEditingController).text,
+            'price': double.tryParse((v['price'] as TextEditingController).text) ?? 0,
+          };
 
-      // 3. Insert Variants
-      final variantsToInsert = _variants.map((v) {
-        return {
-          'product_id': productId,
-          'variant_name': v['name']!.text,
-          'price': double.parse(v['price']!.text),
-        };
-      }).toList();
-
-      await SupabaseConfig.client.from('product_variants').insert(variantsToInsert);
+          if (v['is_new'] == true) {
+             await SupabaseConfig.client.from('product_variants').insert(data);
+          } else {
+             await SupabaseConfig.client.from('product_variants').update(data).eq('id', v['id']);
+          }
+        }
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product Added Successfully!")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product Updated Successfully!")));
         Navigator.pop(context);
       }
     } catch (e) {
-      debugPrint(e.toString());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
@@ -124,11 +149,41 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+  
+  Future<void> _deleteProduct() async {
+     final confirm = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+       title: const Text("Delete Product?"),
+       content: const Text("This cannot be undone."),
+       actions: [
+         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancel")),
+         TextButton(onPressed: () => Navigator.pop(c, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+       ],
+     ));
+
+     if (confirm != true) return;
+     
+     setState(() => _isLoading = true);
+     try {
+       await SupabaseConfig.client.from('products').delete().eq('id', widget.product.id);
+       if (mounted) {
+         Navigator.pop(context);
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product Deleted")));
+       }
+     } catch (e) {
+       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+       setState(() => _isLoading = false);
+     }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Add New Product")),
+      appBar: AppBar(
+        title: const Text("Edit Product"),
+        actions: [
+          IconButton(onPressed: _deleteProduct, icon: const Icon(Icons.delete, color: Colors.red))
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -146,25 +201,17 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey),
                     image: _pickedImage != null 
-                        ? DecorationImage(
-                            image: FileImage(File(_pickedImage!.path)), 
-                            fit: BoxFit.cover
-                          )
-                        : null,
+                        ? DecorationImage(image: FileImage(File(_pickedImage!.path)), fit: BoxFit.cover)
+                        : (widget.product.imageUrl.isNotEmpty 
+                             ? DecorationImage(image: NetworkImage(widget.product.imageUrl), fit: BoxFit.cover)
+                             : null),
                   ),
-                  child: _pickedImage == null 
-                      ? const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                            Text("Tap to add image", style: TextStyle(color: Colors.grey))
-                          ],
-                        )
+                  child: (_pickedImage == null && widget.product.imageUrl.isEmpty)
+                      ? const Center(child: Icon(Icons.add_a_photo, size: 40, color: Colors.grey))
                       : null,
                 ),
               ),
-              if (_pickedImage != null)
-                 Center(child: TextButton(onPressed: _pickImage, child: const Text("Change Image"))),
+              Center(child: TextButton(onPressed: _pickImage, child: const Text("Change Image"))),
               
               const SizedBox(height: 24),
               // Basic Details
@@ -182,17 +229,16 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _categoryCtrl,
-                decoration: const InputDecoration(labelText: "Category (e.g. Tea, Masala)"),
+                decoration: const InputDecoration(labelText: "Category"),
               ),
               const SizedBox(height: 24),
               
               const Divider(),
               const Text("Variants", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const Text("Add sizes like '250g', '500g', etc. and their prices.", style: TextStyle(color: Colors.grey, fontSize: 13)),
               const SizedBox(height: 16),
 
               // Dynamic Variants List
-              ..._variants.asMap().entries.map((entry) {
+              ..._variants.asMap().entries.where((e) => e.value['is_deleted'] == false).map((entry) {
                 final index = entry.key;
                 final variant = entry.value;
                 return Padding(
@@ -205,7 +251,6 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
                           controller: variant['name'],
                           decoration: InputDecoration(
                             labelText: "Size / Name",
-                            hintText: "e.g. 250g",
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
                           ),
@@ -248,10 +293,10 @@ class _AdminAddProductPageState extends State<AdminAddProductPage> {
 
               const SizedBox(height: 32),
               FilledButton(
-                onPressed: _isLoading ? null : _saveProduct,
+                onPressed: _isLoading ? null : _saveChanges,
                 child: _isLoading 
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white))
-                    : const Text("CREATE PRODUCT"),
+                    : const Text("SAVE CHANGES"),
               ),
               const SizedBox(height: 48),
             ],

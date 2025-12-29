@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_theme.dart';
 import 'admin_dashboard_tab.dart';
-import 'admin_orders_tab.dart'; // We will rename the old dashboard logic to this
+import 'admin_orders_tab.dart';
 import 'admin_products_tab.dart';
-import 'admin_chat_tab.dart'; // or Users tab
+import 'admin_chat_tab.dart'; 
+import 'admin_announcements_tab.dart'; 
 
 final adminNavIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -19,6 +20,7 @@ class AdminDashboardRoot extends ConsumerWidget {
       const AdminDashboardTab(),
       const AdminOrdersTab(),
       const AdminProductsTab(),
+      const AdminAnnouncementsTab(),
       const AdminChatTab(),
     ];
 
@@ -45,6 +47,11 @@ class AdminDashboardRoot extends ConsumerWidget {
             icon: Icon(Icons.inventory_2_outlined),
             selectedIcon: Icon(Icons.inventory_2),
             label: 'Products',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.campaign_outlined),
+            selectedIcon: Icon(Icons.campaign),
+            label: 'Offers',
           ),
           NavigationDestination(
             icon: Icon(Icons.chat_outlined),

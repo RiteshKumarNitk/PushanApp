@@ -7,6 +7,7 @@ import 'notifications_page.dart';
 import 'address_book_page.dart';
 import 'security_page.dart';
 import 'help_support_page.dart';
+import 'edit_profile_page.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -18,66 +19,151 @@ class ProfilePage extends ConsumerWidget {
     final user = userAsync.value;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Profile"), centerTitle: true),
+      backgroundColor: Colors.grey[50], // Light bg
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const CircleAvatar(
-              radius: 50,
-              backgroundImage: NetworkImage(Constants.avatarPlaceholder),
+            // Custom Header
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: AppTheme.royalMaroon,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(40),
+                      bottomRight: Radius.circular(40),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5)),
+                      ],
+                    ),
+                    child: const CircleAvatar(
+                      radius: 50,
+                      backgroundImage: NetworkImage(Constants.avatarPlaceholder),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            
             const SizedBox(height: 16),
             Text(
               user?['full_name'] ?? 'VIP Member',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
             Text(
               user?['email'] ?? 'user@example.com',
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
             const SizedBox(height: 32),
-            _buildProfileItem(Icons.person_outline, "Edit Profile", () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Edit Profile Not Implemented")));
-            }),
-            _buildProfileItem(Icons.location_on_outlined, "Address Book", () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressBookPage()));
-            }),
-            _buildProfileItem(Icons.notifications_outlined, "Notifications", () {
-               Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
-            }),
-            _buildProfileItem(Icons.security_outlined, "Security", () {
-               Navigator.push(context, MaterialPageRoute(builder: (_) => const SecurityPage()));
-            }),
-            _buildProfileItem(Icons.help_outline, "Help & Support", () {
-               Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportPage()));
-            }),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  ref.read(authControllerProvider.notifier).signOut();
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text("Log Out"),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: Colors.red),
-                  foregroundColor: Colors.red,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+            
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   _buildSectionTitle("Account Settings"),
+                   _buildMenuCard([
+                     _buildProfileItem(Icons.person_outline, "Edit Profile", () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage()));
+                      }),
+                      _buildDivider(),
+                      _buildProfileItem(Icons.location_on_outlined, "Address Book", () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressBookPage()));
+                      }),
+                      _buildDivider(),
+                      _buildProfileItem(Icons.notifications_outlined, "Notifications", () {
+                         Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
+                      }),
+                      _buildDivider(),
+                      _buildProfileItem(Icons.security_outlined, "Security", () {
+                         Navigator.push(context, MaterialPageRoute(builder: (_) => const SecurityPage()));
+                      }),
+                   ]),
+                   
+                   const SizedBox(height: 24),
+                   _buildSectionTitle("Support"),
+                   _buildMenuCard([
+                      _buildProfileItem(Icons.help_outline, "Help & Center", () {
+                         Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportPage()));
+                      }),
+                   ]),
+
+                   const SizedBox(height: 32),
+                   SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          ref.read(authControllerProvider.notifier).signOut();
+                        },
+                        icon: const Icon(Icons.logout),
+                        label: const Text("Log Out"),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: Colors.red.shade200),
+                          foregroundColor: Colors.red,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          backgroundColor: Colors.red.withOpacity(0.05),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Text(
+                        "Version 1.0.0",
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                ],
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              "Version 1.0.0",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 8),
+      child: Text(
+        title.toUpperCase(), 
+        style: TextStyle(
+          color: Colors.grey[600], 
+          fontSize: 12, 
+          fontWeight: FontWeight.bold, 
+          letterSpacing: 1.2
+        )
+      ),
+    );
+  }
+
+  Widget _buildMenuCard(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(height: 1, indent: 60, color: Colors.grey[100]);
   }
 
   Widget _buildProfileItem(IconData icon, String title, VoidCallback onTap) {
@@ -86,14 +172,14 @@ class ProfilePage extends ConsumerWidget {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: AppTheme.teaLatte,
+          color: AppTheme.teaLatte.withOpacity(0.5),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: AppTheme.primaryGreen),
+        child: Icon(icon, color: AppTheme.primaryGreen, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+      trailing: Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
+      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
     );
   }
 }

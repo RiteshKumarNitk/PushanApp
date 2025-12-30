@@ -31,6 +31,11 @@ class AdminOrderDetailPage extends ConsumerStatefulWidget {
 class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
   bool _isUpdating = false;
 
+  String? _formatAddress(Map<String, dynamic>? addr) {
+    if (addr == null) return null;
+    return "${addr['address_line']}, ${addr['city']}, ${addr['state']}${addr['zip_code'] != null ? ' - ${addr['zip_code']}' : ''}";
+  }
+
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
@@ -67,7 +72,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                           leading: const Icon(Icons.location_on, color: Colors.indigo),
                           title: const Text("Shipping Address", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
                           subtitle: SelectableText( 
-                            user['address'] ?? 'No address provided by user.',
+                            _formatAddress(order['shipping_address']) ?? user['address'] ?? 'No address provided by user.',
                             style: const TextStyle(fontSize: 15, color: Colors.black87),
                           ),
                         ),
@@ -235,17 +240,31 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
   Future<void> _updateStatus(String newStatus) async {
     setState(() => _isUpdating = true);
     try {
-      await SupabaseConfig.client
+      // 1. Update Status
+      final res = await SupabaseConfig.client
           .from('tea_orders')
           .update({'status': newStatus})
-          .eq('id', widget.orderId);
+          .eq('id', widget.orderId)
+          .select('user_id')
+          .single();
+      
+      final userId = res['user_id'];
+
+      // 2. Send Notification
+      await SupabaseConfig.client.from('notifications').insert({
+        'user_id': userId,
+        'title': 'Order Update',
+        'message': 'Your order #${widget.orderId.substring(0, 8).toUpperCase()} has been $newStatus.',
+        'type': 'order_update',
+        'related_id': widget.orderId,
+      });
       
       ref.refresh(orderDetailProvider(widget.orderId));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order marked as $newStatus")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order marked as $newStatus")));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e")));
     } finally {
-      setState(() => _isUpdating = false);
+      if (mounted) setState(() => _isUpdating = false);
     }
   }
 }

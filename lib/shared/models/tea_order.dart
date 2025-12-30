@@ -5,6 +5,7 @@ class TeaOrder {
   final DateTime createdAt;
   final String? adminNotes;
   final String? invoiceUrl;
+  final Map<String, dynamic>? shippingAddress;
   final List<Map<String, dynamic>> items;
 
   TeaOrder({
@@ -14,6 +15,7 @@ class TeaOrder {
     required this.createdAt,
     this.adminNotes,
     this.invoiceUrl,
+    this.shippingAddress,
     this.items = const [],
   });
 
@@ -25,6 +27,7 @@ class TeaOrder {
       createdAt: DateTime.parse(json['created_at']).toLocal(),
       adminNotes: json['admin_notes'],
       invoiceUrl: json['invoice_url'],
+      shippingAddress: json['shipping_address'],
       items: json['tea_order_items'] != null 
           ? List<Map<String, dynamic>>.from(json['tea_order_items']) 
           : [],

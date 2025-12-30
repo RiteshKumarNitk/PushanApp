@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // ShahiChai Royal Palette
-  static const Color royalMaroon = Color(0xFF6A040F);
+  static const Color royalMaroon = Color(0xFF0A4E2B); // Now Green as requested
   static const Color deepGreen = Color(0xFF2D6A4F);
   static const Color goldAccent = Color(0xFFD4A373);
   static const Color creamBg = Color(0xFFFEFAE0);

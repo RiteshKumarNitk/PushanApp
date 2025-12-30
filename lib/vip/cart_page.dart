@@ -7,6 +7,8 @@ import '../../auth/auth_controller.dart';
 import 'cart_controller.dart';
 import 'product_page.dart'; 
 import '../../shared/models/product.dart';
+import '../profile/address_book_page.dart'; // Import for provider
+import '../../shared/models/user_address.dart';
 
 class CartPage extends ConsumerStatefulWidget {
   const CartPage({super.key});
@@ -18,12 +20,14 @@ class CartPage extends ConsumerStatefulWidget {
 class _CartPageState extends ConsumerState<CartPage> {
   final _adminNotesController = TextEditingController(); 
   bool _isSubmitting = false;
+  UserAddress? _selectedAddress;
 
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final productsAsync = ref.watch(productListProvider);
     final userProfile = ref.watch(userProfileProvider).value;
+    final addressesAsync = ref.watch(userAddressesProvider);
 
     if (cart.items.isEmpty) {
       return Scaffold(
@@ -39,7 +43,6 @@ class _CartPageState extends ConsumerState<CartPage> {
           try {
             // Flatten all variants
             final variantToProductMap = <String, Product>{};
-            // Map to store the specific variant object too for easier lookup
             final variantMap = <String, ProductVariant>{};
 
             for (var p in allProducts) {
@@ -49,25 +52,12 @@ class _CartPageState extends ConsumerState<CartPage> {
               }
             }
 
-            // Filter cart items to only show VALID ones
             final validCartItems = cart.items.entries.where((e) {
                return variantMap.containsKey(e.key);
             }).toList();
             
             if (validCartItems.isEmpty) {
-               return Center(
-                 child: Column(
-                   mainAxisAlignment: MainAxisAlignment.center,
-                   children: [
-                     const Text("Items in cart are no longer available."),
-                     const SizedBox(height: 16),
-                     FilledButton(
-                       onPressed: () => ref.read(cartProvider.notifier).clear(),
-                       child: const Text("Clear Cart"),
-                     )
-                   ],
-                 )
-               );
+               return Center(child: Text("Cart items invalid"));
             }
 
             double estimatedTotal = 0;
@@ -78,90 +68,120 @@ class _CartPageState extends ConsumerState<CartPage> {
               }
             }
 
-            return Column(
-              children: [
-                Expanded(
-                  child: ListView.separated(
+            return SingleChildScrollView( 
+              child: Column(
+                children: [
+                  ListView.separated(
                     padding: const EdgeInsets.all(16),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: validCartItems.length,
                     separatorBuilder: (c, i) => const Divider(),
                     itemBuilder: (context, index) {
-                      final entry = validCartItems[index];
-                      final variantId = entry.key;
-                      final qty = entry.value;
-                      
-                      final product = variantToProductMap[variantId];
-                      final variant = variantMap[variantId];
-
-                      // Defensive Check (should satisfy due to filter above, but safe is better)
-                      if (product == null || variant == null) {
-                        return const SizedBox.shrink(); 
-                      }
-
-                      final total = variant.price * qty;
-
+                      final item = validCartItems[index]; 
+                      final v = variantMap[item.key]!; 
+                      final p = variantToProductMap[item.key]!;
                       return ListTile(
-                        leading: _ProductThumbnail(imageUrl: product.imageUrl),
-                        title: Text("${product.name} (${variant.variantName})", style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("${Constants.currencySymbol}${variant.price.toStringAsFixed(0)} x $qty"),
-                        trailing: Text(
-                          "${Constants.currencySymbol}${total.toStringAsFixed(0)}",
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
-                        ),
+                        leading: _ProductThumbnail(imageUrl: p.imageUrl),
+                        title: Text("${p.name} (${v.variantName})"),
+                        subtitle: Text("${Constants.currencySymbol}${v.price.toStringAsFixed(0)} x ${item.value}"),
+                        trailing: Text("${Constants.currencySymbol}${(v.price * item.value).toStringAsFixed(0)}"),
                       );
                     },
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black12, offset: Offset(0, -2))],
+                  
+                  // Address Section
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: addressesAsync.when(
+                      data: (addresses) {
+                        // Auto-select default if none selected
+                        if (_selectedAddress == null && addresses.isNotEmpty) {
+                          try {
+                            _selectedAddress = addresses.firstWhere((a) => a.isDefault, orElse: () => addresses.first);
+                          } catch (_) {}
+                        }
+
+                        if (addresses.isEmpty) {
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(border: Border.all(color: Colors.red.shade200), borderRadius: BorderRadius.circular(8), color: Colors.red.shade50),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                                const SizedBox(width: 8),
+                                const Expanded(child: Text("No address found. Please add one.")),
+                                TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressBookPage())), child: const Text("Manage"))
+                              ],
+                            ),
+                          );
+                        }
+
+                        return DropdownButtonFormField<UserAddress>(
+                          decoration: const InputDecoration(labelText: "Delivery Address"),
+                          value: _selectedAddress,
+                          isExpanded: true,
+                          items: addresses.map((addr) {
+                             return DropdownMenuItem(
+                               value: addr,
+                               child: Text(addr.toString(), overflow: TextOverflow.ellipsis),
+                             );
+                          }).toList(),
+                          onChanged: (val) => setState(() => _selectedAddress = val),
+                        );
+                      },
+                      loading: () => const LinearProgressIndicator(), 
+                      error: (e, s) => Text("Error loading addresses: $e"),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Estimated Total:", style: TextStyle(fontSize: 16)),
-                          Text(
-                            "${Constants.currencySymbol}${estimatedTotal.toStringAsFixed(2)}",
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _adminNotesController,
-                        decoration: const InputDecoration(
-                          labelText: "Notes (Optional)",
-                          hintText: "E.g. Deliver by next Monday",
+
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black12, offset: Offset(0, -2))],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Estimated Total:", style: TextStyle(fontSize: 16)),
+                            Text(
+                              "${Constants.currencySymbol}${estimatedTotal.toStringAsFixed(2)}",
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.royalMaroon),
+                            ),
+                          ],
                         ),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton(
-                        onPressed: _isSubmitting ? null : () => _submitOrder(estimatedTotal, userProfile?['id'], variantMap),
-                        child: _isSubmitting 
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text("SUBMIT REQUEST"),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _adminNotesController,
+                          decoration: const InputDecoration(
+                            labelText: "Notes (Optional)",
+                            hintText: "E.g. Deliver by next Monday",
+                          ),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton(
+                          onPressed: _isSubmitting ? null : () => _submitOrder(estimatedTotal, userProfile?['id'], variantMap),
+                          child: _isSubmitting 
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text("SUBMIT REQUEST"),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           } catch (e, stack) {
-             debugPrint("Cart Build Error: $e $stack");
-             return Center(child: Text("Error displaying cart: $e"));
+             return Center(child: Text("Error: $e"));
           }
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) {
-          debugPrint("CartPage Error: $e");
-          return Center(child: Text("Error loading catalog: $e")); 
-        },
+        error: (e, s) => Center(child: Text("Error: $e")),
       ),
     );
   }
@@ -171,34 +191,34 @@ class _CartPageState extends ConsumerState<CartPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User ID not found. Please Login.")));
       return;
     }
+    if (_selectedAddress == null) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a delivery address")));
+       return;
+    }
 
     setState(() => _isSubmitting = true);
 
     try {
       final cart = ref.read(cartProvider);
       
-      // 1. Create Order
       final orderRes = await SupabaseConfig.client.from('tea_orders').insert({
         'user_id': userId,
         'status': 'requested',
         'total_amount': totalAmount,
         'admin_notes': _adminNotesController.text, 
+        'shipping_address': _selectedAddress!.toJson(), // Snapshot the address
       }).select().single();
 
       final orderId = orderRes['id'];
-
-      // 2. Create Order Items (Only valid ones)
       final itemsToInsert = <Map<String, dynamic>>[];
       
       for (var entry in cart.items.entries) {
         if (!variantMap.containsKey(entry.key)) continue; 
-        
-        final variantId = entry.key;
-        final variant = variantMap[variantId]!;
+        final variant = variantMap[entry.key]!;
         
         itemsToInsert.add({
           'order_id': orderId,
-          'product_id': variantId, 
+          'product_id': entry.key, 
           'quantity': entry.value,
           'unit_price': variant.price,
         });
@@ -208,22 +228,16 @@ class _CartPageState extends ConsumerState<CartPage> {
         await SupabaseConfig.client.from('tea_order_items').insert(itemsToInsert);
       }
 
-      // 3. Clear Cart & Success
       ref.read(cartProvider.notifier).clear();
       if (mounted) {
-        Navigator.pop(context); // Close Cart
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Order Requested Successfully!"),
-            backgroundColor: Colors.green,
-          )
+          const SnackBar(content: Text("Order Requested Successfully!"), backgroundColor: Colors.green)
         );
       }
 
     } catch (e) {
-      if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e")));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e")));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

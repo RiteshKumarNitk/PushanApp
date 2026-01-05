@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../core/supabase_config.dart';
 import '../core/app_theme.dart';
 import '../core/constants.dart';
-import '../auth/auth_controller.dart';
 import 'order_detail_page.dart';
 
 // Fetch All Orders for Admin
@@ -23,49 +22,72 @@ class AdminOrdersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(adminOrdersProvider);
+    final themeColor = AppTheme.primaryGreen;
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50], 
-      appBar: AppBar(
-        title: const Text("Orders Management"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0,
-        actions: [
-          IconButton(
-             icon: const Icon(Icons.refresh, color: AppTheme.royalMaroon),
-            onPressed: () => ref.refresh(adminOrdersProvider),
+    return RefreshIndicator(
+      onRefresh: () async => ref.refresh(adminOrdersProvider),
+      child: Column(
+        children: [
+          // Custom Header
+          Container(
+            padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Management", style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                    const SizedBox(height: 4),
+                    const Text("Client Orders", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  ],
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: themeColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.refresh, color: themeColor),
+                    onPressed: () => ref.refresh(adminOrdersProvider),
+                  ),
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+          
+          Expanded(
+            child: ordersAsync.when(
+              data: (orders) {
+                if (orders.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                         Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[300]),
+                         const SizedBox(height: 16),
+                         const Text("No orders found", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: orders.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 16),
+                  itemBuilder: (context, index) => _buildOrderCard(context, ref, orders[index]),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Center(child: Text("Error: $e")),
+            ),
           ),
         ],
-      ),
-      body: ordersAsync.when(
-        data: (orders) {
-          if (orders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                   Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[300]),
-                   const SizedBox(height: 16),
-                   const Text("No orders yet", style: TextStyle(color: Colors.grey, fontSize: 16)),
-                ],
-              ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: orders.length,
-            separatorBuilder: (c, i) => const SizedBox(height: 12),
-            itemBuilder: (context, index) => _buildOrderCard(context, ref, orders[index]),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text("Error: $e")),
       ),
     );
   }
@@ -73,7 +95,8 @@ class AdminOrdersTab extends ConsumerWidget {
   Widget _buildOrderCard(BuildContext context, WidgetRef ref, Map<String, dynamic> order) {
     final user = order['users'] as Map<String, dynamic>?;
     final status = order['status'] as String;
-    final total = (order['total_amount'] as num).toDouble();
+    final rawTotal = order['total_amount'];
+    final total = (rawTotal is num) ? rawTotal.toDouble() : 0.0;
     final date = DateTime.parse(order['created_at']).toLocal();
     final isPending = status == 'requested';
 
@@ -86,13 +109,13 @@ class AdminOrdersTab extends ConsumerWidget {
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: isPending ? Border.all(color: Colors.orange.withOpacity(0.5), width: 1.5) : null,
+          border: Border.all(color: isPending ? Colors.orange.withOpacity(0.3) : Colors.transparent, width: 1),
           boxShadow: [
-             BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+             BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
@@ -100,57 +123,46 @@ class AdminOrdersTab extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "#${order['id'].toString().substring(0, 8).toUpperCase()}",
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500], letterSpacing: 1),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      user?['business_name'] ?? user?['full_name'] ?? 'Unknown User',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(status).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _getStatusColor(status).withOpacity(0.2)),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      color: _getStatusColor(status), 
-                      fontSize: 10, 
-                      fontWeight: FontWeight.bold
-                    ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "#${order['id'].toString().substring(0, 8).toUpperCase()}",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[400], fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user?['business_name'] ?? user?['full_name'] ?? 'Unknown User',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
+                _buildStatusBadge(status),
               ],
             ),
             const SizedBox(height: 16),
-            const Divider(height: 1),
+            const Divider(height: 1, color: Color(0xFFF5F5F5)),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                    const SizedBox(width: 6),
+                    Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey[400]),
+                    const SizedBox(width: 8),
                     Text(
-                      DateFormat('MMM dd, yyyy • hh:mm a').format(date),
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      DateFormat('MMM dd • HH:mm').format(date),
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
                 Text(
-                  "${Constants.currencySymbol}${total.toStringAsFixed(2)}",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.royalMaroon),
+                  "${Constants.currencySymbol}${NumberFormat('#,##0.00').format(total)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primaryGreen),
                 ),
               ],
             ),
@@ -160,7 +172,33 @@ class AdminOrdersTab extends ConsumerWidget {
     );
   }
 
+  Widget _buildStatusBadge(String status) {
+    Color color;
+    switch (status) {
+      case 'requested': color = Colors.orange; break;
+      case 'approved': color = Colors.blue; break;
+      case 'packed': color = Colors.indigo; break;
+      case 'shipped': color = Colors.purple; break;
+      case 'delivered': color = Colors.green; break;
+      case 'rejected': color = Colors.red; break;
+      default: color = Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+      ),
+    );
+  }
+
   Color _getStatusColor(String status) {
+      // Helper kept if needed, but mostly served by _buildStatusBadge now
     switch (status) {
       case 'requested': return Colors.orange;
       case 'approved': return Colors.blue;

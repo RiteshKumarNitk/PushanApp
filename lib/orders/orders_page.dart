@@ -216,6 +216,12 @@ class _OrderCard extends StatelessWidget {
     // delivered -> Step 3 (Active)
     
     int visualStep = 0;
+    // Map DB status to visual steps
+    // Step 0: Placed (requested)
+    // Step 1: Confirmed (approved/packed)
+    // Step 2: Shipped (shipped)
+    // Step 3: Delivered (delivered)
+
     if (order.status == 'approved' || order.status == 'packed') visualStep = 1;
     if (order.status == 'shipped') visualStep = 2;
     if (order.status == 'delivered') visualStep = 3;

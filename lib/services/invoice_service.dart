@@ -2,9 +2,6 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:printing/printing.dart';
-// Actually better to pass a generic Map or DTO to decouple, but for speed we'll use the model structure we know.
-// Let's assume we pass the data needed directly.
 
 class InvoiceService {
   static Future<Uint8List> generateInvoice({
@@ -15,6 +12,7 @@ class InvoiceService {
     required String customerAddress,
     required List<Map<String, dynamic>> items, // {name, quantity, unit_price, total}
     required double grandTotal,
+    double discount = 0,
   }) async {
     final pdf = pw.Document();
     
@@ -102,14 +100,37 @@ class InvoiceService {
 
               pw.Divider(),
 
-              // Total
+              // Totals
               pw.Container(
                 alignment: pw.Alignment.centerRight,
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.end,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text("Grand Total: ", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
-                    pw.Text("INR ${grandTotal.toStringAsFixed(2)}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18, color: PdfColors.brown900)),
+                    if (discount > 0) ...[
+                      pw.Row(
+                        mainAxisSize: pw.MainAxisSize.min,
+                        children: [
+                          pw.Text("Subtotal: ", style: const pw.TextStyle(color: PdfColors.grey700)),
+                          pw.Text("INR ${(grandTotal + discount).toStringAsFixed(2)}"),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                         mainAxisSize: pw.MainAxisSize.min,
+                         children: [
+                           pw.Text("Discount: ", style: const pw.TextStyle(color: PdfColors.green)),
+                           pw.Text("- INR ${discount.toStringAsFixed(2)}", style: const pw.TextStyle(color: PdfColors.green)),
+                         ],
+                      ),
+                      pw.Divider(),
+                    ],
+                    pw.Row(
+                      mainAxisSize: pw.MainAxisSize.min,
+                      children: [
+                        pw.Text("Grand Total: ", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                        pw.Text("INR ${grandTotal.toStringAsFixed(2)}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18, color: PdfColors.brown900)),
+                      ],
+                    ),
                   ],
                 ),
               ),

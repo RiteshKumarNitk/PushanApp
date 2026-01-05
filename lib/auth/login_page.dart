@@ -80,7 +80,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  "Sign in to continue your tea journey",
+                  "Your account is created by TeaVerse Admin.\nPlease use the credentials shared with you.",
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey),
                 ),

@@ -12,8 +12,8 @@ import '../../services/invoice_service.dart';
 final vipOrderDetailProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, orderId) async {
   return SupabaseConfig.client
       .from('tea_orders')
-      // Deep select: items -> product_variants -> products
-      .select('*, tea_order_items(*, product_variants(*, products(*))), users:user_id(*)')
+      // Deep select with explicit relationship for product_variants (using product_id FK)
+      .select('*, tea_order_items(*, product_variants!tea_order_items_variant_id_fkey(*, products(*))), users:user_id(*)')
       .eq('id', orderId)
       .single();
 });
@@ -96,6 +96,24 @@ class VipOrderDetailPage extends ConsumerWidget {
                   },
                 ),
                 const Divider(),
+                if (order['discount_amount'] != null && (order['discount_amount'] as num) > 0) ...[
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: [
+                       const Text("Subtotal:", style: TextStyle(color: Colors.grey)),
+                       Text("${Constants.currencySymbol}${((total + (order['discount_amount'] as num)).toDouble()).toStringAsFixed(2)}"),
+                     ],
+                   ),
+                   const SizedBox(height: 8),
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: [
+                       Text("Discount (${order['coupon_code']}):", style: const TextStyle(color: Colors.green)),
+                       Text("-${Constants.currencySymbol}${(order['discount_amount'] as num).toStringAsFixed(2)}", style: const TextStyle(color: Colors.green)),
+                     ],
+                   ),
+                   const Divider(),
+                ],
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
@@ -134,6 +152,7 @@ class VipOrderDetailPage extends ConsumerWidget {
                           customerAddress: user['address'] ?? '',
                           items: itemsList,
                           grandTotal: total,
+                          discount: (order['discount_amount'] as num?)?.toDouble() ?? 0,
                         );
 
                         await Printing.layoutPdf(

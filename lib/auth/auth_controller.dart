@@ -36,6 +36,29 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         ));
   }
 
+  Future<void> createVipUser({
+    required String email,
+    required String password,
+    String? fullName,
+    String? phone,
+    String? addressLine,
+    String? city,
+    String? addressState, // Renamed from state to avoid conflict
+    String? zipCode,
+  }) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() => _authService.createVipUser(
+          email: email,
+          password: password,
+          fullName: fullName,
+          phone: phone,
+          addressLine: addressLine,
+          city: city,
+          state: addressState, // Usage updated
+          zipCode: zipCode,
+        ));
+  }
+
   Future<void> signOut() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => _authService.signOut());

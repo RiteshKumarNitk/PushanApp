@@ -8,6 +8,7 @@ import 'address_book_page.dart';
 import 'security_page.dart';
 import 'help_support_page.dart';
 import 'edit_profile_page.dart';
+import '../wallet/wallet_page.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -65,7 +66,53 @@ class ProfilePage extends ConsumerWidget {
               user?['email'] ?? 'user@example.com',
               style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            
+            // Supercoin Wallet Card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: GestureDetector(
+                onTap: () {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletPage()));
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.orange.shade400, Colors.deepOrange.shade600],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Supercoin Balance", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.monetization_on, color: Colors.yellowAccent, size: 24),
+                              const SizedBox(width: 8),
+                              Text(
+                                "${user?['supercoins'] ?? 0}",
+                                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          )
+                        ],
+                      ),
+                      const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
             
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),

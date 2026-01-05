@@ -4,40 +4,40 @@ import 'package:intl/intl.dart';
 import '../core/supabase_config.dart';
 import '../core/app_theme.dart';
 import '../core/constants.dart';
+import 'admin_users_page.dart';
 
+// Provider to fetch minimal stats (Mock or Real)
 final adminStatsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  // Fetch all orders with relevant fields
   final res = await SupabaseConfig.client
       .from('tea_orders')
-      .select('status, total_amount, created_at');
+      .select('status, total_amount');
 
   final orders = List<Map<String, dynamic>>.from(res);
-
-  double totalRevenue = 0; // Delivered
-  double totalBooked = 0; // Active (Approved, Packed, Shipped)
-  int pendingCount = 0; // Requested
-  int completedCount = 0; // Delivered
+  double totalRevenue = 0.0; 
+  double pendingAmount = 0.0;
+  int pendingCount = 0;
 
   for (var o in orders) {
     final status = o['status'];
-    final amount = (o['total_amount'] as num).toDouble();
+    // Safely handle total_amount being null or not a number
+    final rawAmount = o['total_amount'];
+    final double amount = (rawAmount is num) ? rawAmount.toDouble() : 0.0;
 
     if (status == 'delivered') {
       totalRevenue += amount;
-      completedCount++;
-    } else if (['approved', 'packed', 'shipped'].contains(status)) {
-      totalBooked += amount;
-    } else if (status == 'requested') {
+    } else if (['requested', 'approved', 'packed', 'shipped'].contains(status)) {
+      pendingAmount += amount;
+    }
+    if (status == 'requested' || status == 'approved') {
       pendingCount++;
     }
   }
 
   return {
     'total_sales': totalRevenue,
-    'total_booked': totalBooked,
+    'pending_value': pendingAmount,
     'total_orders': orders.length,
-    'pending_orders': pendingCount,
-    'completed_orders': completedCount,
+    'action_needed': pendingCount,
   };
 });
 
@@ -48,237 +48,163 @@ class AdminDashboardTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(adminStatsProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: statsAsync.when(
-        data: (stats) {
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context, ref),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Business Overview",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              "Total Revenue",
-                              "${Constants.currencySymbol}${NumberFormat.compact().format(stats['total_sales'])}",
-                              Colors.green.shade700,
-                              Icons.payments_outlined,
-                              "Actual Sales",
-                              isPrimary: true,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildStatCard(
-                              "In Pipeline",
-                              "${Constants.currencySymbol}${NumberFormat.compact().format(stats['total_booked'])}",
-                              AppTheme.royalMaroon,
-                              Icons.hourglass_top_outlined,
-                              "Pending Delivery",
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              "Total Orders",
-                              "${stats['total_orders']}",
-                              Colors.orange.shade800,
-                              Icons.shopping_bag_outlined,
-                              "Lifetime Volume",
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildStatCard(
-                              "Action Needed",
-                              "${stats['pending_orders']}",
-                              Colors.redAccent,
-                              Icons.notification_important_outlined,
-                              "New Requests",
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      _buildInsightsSection(stats),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text("Error: $e")),
-      ),
-    );
-  }
+    // Using app theme colors for consistency
+    final primaryColor = AppTheme.primaryGreen;
 
-  Widget _buildHeader(BuildContext context, WidgetRef ref) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 20, 
-        left: 24, 
-        right: 24, 
-        bottom: 30
-      ),
-      decoration: const BoxDecoration(
-        color: AppTheme.royalMaroon,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Column(
+    return RefreshIndicator(
+      onRefresh: () async => ref.refresh(adminStatsProvider),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Custom Header Area
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 40),
+              decoration: BoxDecoration(
+                color: primaryColor,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(32),
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: [
+                  BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10)),
+                ]
+              ),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Admin Portal", style: TextStyle(color: AppTheme.goldAccent, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 1)),
-                  SizedBox(height: 4),
-                  Text("Dashboard", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, fontFamily: 'CormorantGaramond')),
+                   const Text(
+                    "Welcome back, Admin",
+                    style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Dashboard",
+                        style: TextStyle(
+                          color: Colors.white, 
+                          fontSize: 32, 
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.date_range, color: Colors.white, size: 20),
+                      )
+                    ],
+                  ),
                 ],
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  shape: BoxShape.circle,
+            ),
+            
+            // Stats Content
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: statsAsync.when(
+                data: (stats) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Business Overview", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[800])),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: _buildStatCard("Revenue", "${Constants.currencySymbol}${NumberFormat.compact().format(stats['total_sales'])}", Colors.green, Icons.attach_money)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _buildStatCard("Pending", "${Constants.currencySymbol}${NumberFormat.compact().format(stats['pending_value'])}", Colors.orange, Icons.pending_actions)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: _buildStatCard("Total Orders", "${stats['total_orders']}", Colors.purple, Icons.shopping_bag)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _buildStatCard("New Requests", "${stats['action_needed']}", Colors.red, Icons.notification_important)),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 32),
+                    Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[800])),
+                    const SizedBox(height: 16),
+                    
+                    // Quick Action List
+                    _buildQuickAction(context, "Manage Users", "View and edit user roles", Icons.people_outline, Colors.blue, () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: Text("Users")), body: const AdminUsersPage())));
+                    }),
+                    const SizedBox(height: 12),
+                    // Add more actions as needed...
+                  ],
                 ),
-                child: IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.white),
-                  onPressed: () => ref.refresh(adminStatsProvider),
-                ),
+                loading: () => const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator())),
+                error: (e,s) => Text("Error: $e"),
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon, String subtitle, {bool isPrimary = false}) {
+  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
+          BoxShadow(color: color.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
         ],
-        border: isPrimary ? Border.all(color: color.withOpacity(0.3), width: 1) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 24),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 16),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey[400],
-            ),
-          ),
+          Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  Widget _buildInsightsSection(Map<String, dynamic> stats) {
-    return Container(
-       padding: const EdgeInsets.all(24),
-       decoration: BoxDecoration(
-         gradient: LinearGradient(
-           colors: [Colors.white, Colors.grey.shade50],
-           begin: Alignment.topLeft,
-           end: Alignment.bottomRight,
-         ),
-         borderRadius: BorderRadius.circular(24),
-         boxShadow: [
-           BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-         ],
-       ),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           const Row(
-             children: [
-               Icon(Icons.analytics_outlined, color: AppTheme.royalMaroon),
-               SizedBox(width: 8),
-               Text(
-                 "Performance Insights",
-                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-               ),
-             ],
-           ),
-           const SizedBox(height: 24),
-           _buildInsightRow("Conversion Rate", "${((stats['completed_orders'] / (stats['total_orders'] == 0 ? 1 : stats['total_orders'])) * 100).toStringAsFixed(1)}%"),
-           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider()),
-           _buildInsightRow("Avg. Order Value", "${Constants.currencySymbol}${((stats['total_sales'] + stats['total_booked']) / (stats['total_orders'] == 0 ? 1 : stats['total_orders'])).toStringAsFixed(2)}"),
-           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider()),
-            _buildInsightRow("Pending Value", "${Constants.currencySymbol}${stats['total_booked'].toStringAsFixed(2)}"),
-         ],
-       ),
-    );
-  }
-
-  Widget _buildInsightRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-      ],
+  Widget _buildQuickAction(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(backgroundColor: color.withOpacity(0.1), radius: 24, child: Icon(icon, color: color, size: 22)),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(subtitle, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+              ],
+            ),
+            const Spacer(),
+            Icon(Icons.chevron_right, color: Colors.grey[300]),
+          ],
+        ),
+      ),
     );
   }
 }

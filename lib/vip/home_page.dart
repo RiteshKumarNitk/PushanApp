@@ -7,6 +7,35 @@ import '../../core/supabase_config.dart';
 import '../../shared/screens/chat_screen.dart';
 import 'vip_bottom_nav.dart';
 import 'unread_message_controller.dart';
+import 'product_page.dart'; // For productListProvider
+import '../profile/notifications_page.dart';
+import 'wallet_page.dart';
+
+// Define lastOrderProvider locally or find a better home later
+final lastOrderProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final user = ref.read(userProfileProvider).value;
+  if (user == null) return null;
+
+  final res = await SupabaseConfig.client
+      .from('tea_orders')
+      .select()
+      .eq('user_id', user['id']) 
+      .order('created_at', ascending: false)
+      .limit(1)
+      .maybeSingle();
+      
+  return res;
+});
+
+// Provider for Active Announcement
+final activeAnnouncementProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  return SupabaseConfig.client
+      .from('announcements')
+      .stream(primaryKey: ['id'])
+      .eq('is_active', true)
+      .limit(1)
+      .map((data) => data.isNotEmpty ? data.first : null);
+});
 
 class VipHomePage extends ConsumerWidget {
   const VipHomePage({super.key});
@@ -21,190 +50,114 @@ class VipHomePage extends ConsumerWidget {
     else if (hour < 17) greeting = "Good Afternoon";
     else greeting = "Good Evening";
 
+    final lastOrderAsync = ref.watch(lastOrderProvider);
+    final productsAsync = ref.watch(productListProvider);
+    final announcementAsync = ref.watch(activeAnnouncementProvider);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.grey[50], // Soft background
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // --- HEADER ---
             Stack(
+              clipBehavior: Clip.none,
               children: [
+                // Background Gradient
                 Container(
-                  height: 260, // Increased height for announcement space
+                  height: 280, 
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [AppTheme.royalMaroon, AppTheme.royalMaroon.withOpacity(0.8)],
+                      colors: [AppTheme.royalMaroon, AppTheme.deepGreen],
                     ),
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
-                    ),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
                   ),
                 ),
+                // Decorative Circle
                 Positioned(
                   top: -50,
                   right: -50,
                   child: Container(
-                    width: 200,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      shape: BoxShape.circle,
-                    ),
+                    width: 200, height: 200,
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle),
                   ),
                 ),
                 SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // User Info Row
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "$greeting,",
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: AppTheme.goldAccent,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
+                                Text(greeting, style: const TextStyle(color: AppTheme.goldAccent, fontSize: 14, fontWeight: FontWeight.bold)),
                                 Text(
                                   user?['full_name'] ?? 'Guest',
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    fontFamily: 'CormorantGaramond',
-                                  ),
+                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'CormorantGaramond'),
                                 ),
                               ],
                             ),
-                            Row(
-                              children: [
-                                _buildNotificationIcon(context, ref),
-                                const SizedBox(width: 16),
-                                Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppTheme.goldAccent, width: 2),
-                                  ),
-                                  child: const CircleAvatar(
-                                    radius: 20,
-                                    backgroundImage: NetworkImage(Constants.avatarPlaceholder),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          Row(
+                            children: [
+                              _buildChatIcon(context, ref),
+                              const SizedBox(width: 12),
+                              _buildRealNotificationIcon(context, ref),
+                            ],
+                          ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 30),
 
-                        // Active Announcement (If any)
-                        StreamBuilder(
-                          stream: SupabaseConfig.client
-                              .from('announcements')
-                              .stream(primaryKey: ['id'])
-                              .eq('is_active', true)
-                              .limit(1),
-                          builder: (context, snapshot) {
-                             if (!snapshot.hasData || (snapshot.data as List).isEmpty) return const SizedBox.shrink();
-                             final offer = (snapshot.data as List).first;
-                             
-                             return Container(
-                               margin: const EdgeInsets.only(bottom: 24),
-                               width: double.infinity,
-                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                               decoration: BoxDecoration(
-                                 color: AppTheme.goldAccent,
-                                 borderRadius: BorderRadius.circular(12),
-                                 boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.4), blurRadius: 8)],
-                               ),
-                               child: Row(
-                                 children: [
-                                   const Icon(Icons.stars, color: AppTheme.royalMaroon),
-                                   const SizedBox(width: 12),
-                                   Expanded(
-                                     child: Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: [
-                                         Text(offer['title'], style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.royalMaroon)),
-                                         Text(offer['message'], style: const TextStyle(fontSize: 12, color: AppTheme.royalMaroon, fontWeight: FontWeight.w500)),
-                                       ],
-                                     ),
-                                   ),
-                                 ],
-                               ),
-                             );
-                          },
-                        ),
-                        
+                        // Stats Card
                         Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
+                              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 10)),
                             ],
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "Business Account",
-                                        style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        user?['business_name'] ?? 'VIP Partner',
-                                        style: TextStyle(
-                                          color: AppTheme.royalMaroon,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.royalMaroon.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.storefront, color: AppTheme.royalMaroon),
-                                  ),
-                                ],
+                              // Last Order Status
+                              Expanded(
+                                child: lastOrderAsync.when(
+                                  data: (order) {
+                                    final status = order != null ? (order['status'] as String).toUpperCase() : 'NO ORDERS';
+                                    final date = order != null ? DateTime.parse(order['created_at']).toString().split(' ')[0] : '';
+                                    return _buildStatItem("Last Order", status, subtitle: date, color: _getStatusColor(status));
+                                  },
+                                  loading: () => _buildStatItem("Last Order", "Loading..."),
+                                  error: (e,s) => _buildStatItem("Last Order", "Error"),
+                                ),
                               ),
-                              const SizedBox(height: 24),
-                              const Divider(),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  _buildStatItem("Last Order", "---"),
-                                  _buildStatItem("Status", "Active", color: Colors.green),
-                                  _buildStatItem("Credit", "₹0.00"),
-                                ],
+                              Container(width: 1, height: 40, color: Colors.grey[200]),
+                              // Supercoins Credit
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletPage()));
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 16),
+                                    child: _buildStatItem(
+                                      "Your Credit", 
+                                      "${user?['supercoins'] ?? 0}", 
+                                      subtitle: "Supercoins",
+                                      color: AppTheme.primaryGreen,
+                                      icon: Icons.monetization_on
+                                    ),
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -215,46 +168,79 @@ class VipHomePage extends ConsumerWidget {
                 ),
               ],
             ),
-            
+
+            // --- BODY CONTENT ---
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Quick Actions",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-                  ),
-                  const SizedBox(height: 16),
+                  
+                  // Quick Actions
+                  const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: _buildActionCard(
                           icon: Icons.add_shopping_cart,
-                          title: "New Order",
-                          subtitle: "Browse Catalog",
-                          color: AppTheme.deepGreen,
+                          title: "New Request",
+                          subtitle: "Bulk Order",
+                          color: AppTheme.royalMaroon,
                           onTap: () {
-                            ref.read(vipNavIndexProvider.notifier).state = 1; 
+                             ref.read(vipNavIndexProvider.notifier).state = 1; 
                           },
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: _buildActionCard(
                           icon: Icons.history,
-                          title: "Past Orders",
-                          subtitle: "Track Status",
-                          color: AppTheme.royalMaroon,
-                          onTap: () {
-                             ref.read(vipNavIndexProvider.notifier).state = 2; 
-                          },
+                          title: "Track Order",
+                          subtitle: "Check Status",
+                          color: AppTheme.deepGreen,
+                          onTap: () => ref.read(vipNavIndexProvider.notifier).state = 2,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  _buildSupportBanner(context),
+
+                  const SizedBox(height: 24),
+
+                  // ACTIVE ANNOUNCEMENT / ADVERTISEMENT
+                  announcementAsync.when(
+                    data: (data) => data != null ? _buildAnnouncementCard(data) : const SizedBox.shrink(),
+                    loading: () => const SizedBox.shrink(),
+                    error: (_,__) => const SizedBox.shrink(),
+                  ),
+
+                  if (announcementAsync.value != null) const SizedBox(height: 24),
+
+                  // Pushan Tea Story / Banner
+                  _buildBrandBanner(),
+
+                  const SizedBox(height: 24),
+
+                  // Featured Products Horizontal List
+                  const Text("Featured Collections", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 180,
+                    child: productsAsync.when(
+                      data: (products) {
+                        return ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: products.length,
+                          separatorBuilder: (c, i) => const SizedBox(width: 16),
+                          itemBuilder: (context, index) => _buildFeaturedProductCard(products[index]),
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (e, s) => const Center(child: Text("Unable to load collections")),
+                    ),
+                  ),
+                   
+                  const SizedBox(height: 100), // Bottom padding
                 ],
               ),
             ),
@@ -264,16 +250,151 @@ class VipHomePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatItem(String label, String value, {Color? color}) {
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'DELIVERED': return Colors.green;
+      case 'SHIPPED': return Colors.blue;
+      case 'REQUESTED': return Colors.orange;
+      case 'NO ORDERS': return Colors.grey;
+      default: return Colors.black87;
+    }
+  }
+
+  Widget _buildStatItem(String label, String value, {String? subtitle, Color? color, IconData? icon}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+        Row(
+          children: [
+            Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w600)),
+            if(icon != null) ...[const SizedBox(width: 4), Icon(icon, size: 14, color: Colors.orange)],
+          ],
+        ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color ?? Colors.black87)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: color ?? Colors.black87)),
+        if (subtitle != null)
+        Text(subtitle, style: TextStyle(color: Colors.grey[400], fontSize: 11)),
       ],
     );
   }
+
+  Widget _buildAnnouncementCard(Map<String, dynamic> data) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        // Vibrant gradient for ads
+        gradient: const LinearGradient(colors: [Colors.orange, Colors.redAccent]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                child: const Text("SPECIAL OFFER", style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+              const Spacer(),
+              const Icon(Icons.local_offer, color: Colors.white, size: 20),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            data['title'] ?? 'Special Announcement',
+            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            data['message'] ?? 'Check out our latest offers!',
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrandBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.royalMaroon,
+        borderRadius: BorderRadius.circular(16),
+        image: const DecorationImage(
+           image: NetworkImage("https://images.unsplash.com/photo-1594631230802-325a3310110c?auto=format&fit=crop&q=80&w=1000"),
+           fit: BoxFit.cover,
+           opacity: 0.2, 
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Pushan Tea Legacy", style: TextStyle(color: AppTheme.goldAccent, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text(
+            "Experience the finest\nhand-picked tea leaves.",
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'CormorantGaramond'),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () {},
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.royalMaroon,
+              textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8)
+            ),
+            child: const Text("Read Our Story"),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturedProductCard(dynamic product) {
+    // Assuming product object structure
+    return Container(
+      width: 140,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
+                (product.imageUrl != null && product.imageUrl.isNotEmpty) ? product.imageUrl : Constants.defaultTeaImage,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                errorBuilder: (c,e,s) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(product.category ?? 'Premium Tea', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+
 
   Widget _buildActionCard({
     required IconData icon, 
@@ -361,7 +482,7 @@ class VipHomePage extends ConsumerWidget {
   }
 
 
-  Widget _buildNotificationIcon(BuildContext context, WidgetRef ref) {
+  Widget _buildChatIcon(BuildContext context, WidgetRef ref) {
     final unreadAsync = ref.watch(unreadMessageCountProvider);
 
     return InkWell(
@@ -374,33 +495,54 @@ class VipHomePage extends ConsumerWidget {
          } catch (e) { /* ignore */ }
       },
       borderRadius: BorderRadius.circular(20),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(Icons.notifications_none, color: Colors.white.withOpacity(0.9), size: 28),
-          unreadAsync.when(
-            data: (count) {
-              if (count == 0) return const SizedBox.shrink();
-              return Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1), 
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 24),
+            unreadAsync.when(
+              data: (count) {
+                if (count == 0) return const SizedBox.shrink();
+                return Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Center(child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
                   ),
-                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                  child: Center(
-                    child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              );
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_,__) => const SizedBox.shrink(),
-          ),
-        ],
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (_,__) => const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRealNotificationIcon(BuildContext context, WidgetRef ref) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
+        ),
+        child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
       ),
     );
   }

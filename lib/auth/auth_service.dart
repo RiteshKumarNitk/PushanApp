@@ -8,16 +8,34 @@ class AuthService {
 
   User? get currentUser => _supabase.auth.currentUser;
 
-  Future<AuthResponse> signUp({
-    required String email, 
+  // Replaces public signUp with Admin-only creation
+  Future<void> createVipUser({
+    required String email,
     required String password,
-    required String fullName,
+    String? fullName,
+    String? phone,
+    String? addressLine,
+    String? city,
+    String? state,
+    String? zipCode,
   }) async {
-    return await _supabase.auth.signUp(
-      email: email,
-      password: password,
-      data: {'full_name': fullName},
+    final response = await _supabase.functions.invoke(
+      'create_vip_user',
+      body: {
+        'email': email,
+        'password': password,
+        'fullName': fullName,
+        'phone': phone,
+        'addressLine': addressLine,
+        'city': city,
+        'state': state,
+        'zipCode': zipCode,
+      },
     );
+
+    if (response.status != 200) {
+      throw Exception('Failed to create user: ${response.data}');
+    }
   }
 
   Future<AuthResponse> signIn({
@@ -46,5 +64,27 @@ class AuthService {
         .single();
     
     return response;
+  }
+
+  // Admin: Fetch all users
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final response = await _supabase
+        .from('users')
+        .select()
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  // Admin: Update User
+  Future<void> updateUser(String userId, {String? fullName, String? phone, String? role, bool? isActive}) async {
+    final updates = <String, dynamic>{};
+    if (fullName != null) updates['full_name'] = fullName;
+    if (phone != null) updates['phone'] = phone;
+    if (role != null) updates['role'] = role;
+    if (isActive != null) updates['is_active'] = isActive;
+
+    if (updates.isNotEmpty) {
+      await _supabase.from('users').update(updates).eq('id', userId);
+    }
   }
 }

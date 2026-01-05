@@ -7,6 +7,7 @@ import 'auth/auth_controller.dart';
 import 'auth/login_page.dart';
 import 'navigation/bottom_nav.dart';
 import 'vip/vip_bottom_nav.dart';
+import 'home/customer_home_page.dart';
 import 'admin/admin_root.dart';
 
 void main() async {
@@ -56,10 +57,11 @@ class AuthGate extends ConsumerWidget {
               }
               
               final role = profile['role'];
+
               if (role == 'admin') {
                 return const AdminDashboardRoot();
               } else {
-                return const VipBottomNav();
+                return const VipBottomNav(); // Reverted to Original UI
               }
             },
             loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),

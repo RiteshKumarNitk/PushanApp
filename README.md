@@ -1,16 +1,16 @@
-# tea_verse
+# TeaVerse
 
-A new Flutter project.
+A Flutter-based e-commerce application for Tea lovers.
+
+## Overview
+TeaVerse connects tea enthusiasts with premium tea products. It features a robust dual-interface system for both Customers and Administrators.
+
+## Documentation
+For a complete summary of the project, architecture, feature modules, and setup instructions, please refer to the **[Project Documentation](DOCUMENTATION.md)**.
+
+## Key Features
+-   **For Customers**: Browse products, manage cart, place orders, and track shipments.
+-   **For Admins**: Manage inventory, process orders, and communicate with customers via chat.
 
 ## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Please check the `DOCUMENTATION.md` file for detailed setup instructions.

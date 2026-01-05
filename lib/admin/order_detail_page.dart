@@ -12,8 +12,8 @@ final orderDetailProvider = FutureProvider.family<Map<String, dynamic>, String>(
   // Fetch Order + Items + User + Variants + Products
   final orderRes = await SupabaseConfig.client
       .from('tea_orders')
-      // Deep select: items -> product_variants -> products
-      .select('*, tea_order_items(*, product_variants(*, products(*))), users:user_id(*)')
+      // Deep select with explicit relationship for product_variants (using product_id FK)
+      .select('*, tea_order_items(*, product_variants!tea_order_items_variant_id_fkey(*, products(*))), users:user_id(*)')
       .eq('id', orderId)
       .single();
   
@@ -121,6 +121,24 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                   },
                 ),
                 const Divider(),
+                if (order['discount_amount'] != null && (order['discount_amount'] as num) > 0) ...[
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: [
+                       const Text("Subtotal:", style: TextStyle(color: Colors.grey)),
+                       Text("${Constants.currencySymbol}${((order['total_amount'] as num) + (order['discount_amount'] as num)).toStringAsFixed(2)}"),
+                     ],
+                   ),
+                   const SizedBox(height: 8),
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: [
+                       Text("Discount (${order['coupon_code']}):", style: const TextStyle(color: Colors.green)),
+                       Text("-${Constants.currencySymbol}${(order['discount_amount'] as num).toStringAsFixed(2)}", style: const TextStyle(color: Colors.green)),
+                     ],
+                   ),
+                   const Divider(),
+                ],
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
@@ -160,6 +178,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                           customerAddress: user['address'] ?? '',
                           items: itemsList,
                           grandTotal: (order['total_amount'] as num).toDouble(),
+                          discount: (order['discount_amount'] as num?)?.toDouble() ?? 0,
                         );
 
                         await Printing.layoutPdf(

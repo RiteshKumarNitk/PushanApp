@@ -36,34 +36,87 @@ final productListProvider = FutureProvider<List<Product>>((ref) async {
   }
 });
 
-class ProductPage extends ConsumerWidget {
+class ProductPage extends ConsumerStatefulWidget {
   const ProductPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductPage> createState() => _ProductPageState();
+}
+
+class _ProductPageState extends ConsumerState<ProductPage> {
+  final _searchController = TextEditingController();
+  String _searchQuery = "";
+
+  @override
+  Widget build(BuildContext context) {
     final productsAsync = ref.watch(productListProvider);
     final cartState = ref.watch(cartProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text("Bulk Catalog")),
-      body: productsAsync.when(
-        data: (products) {
-          if (products.isEmpty) {
-            return const Center(child: Text("No products available"));
-          }
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: "Search teas...",
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty 
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, color: Colors.grey),
+                      onPressed: () {
+                         _searchController.clear();
+                         setState(() => _searchQuery = "");
+                      },
+                    ) 
+                  : null,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (val) {
+                setState(() => _searchQuery = val.toLowerCase());
+              },
+            ),
+          ),
+          
+          Expanded(
+            child: productsAsync.when(
+              data: (products) {
+                // Filter Logic
+                final filtered = products.where((p) {
+                   return p.name.toLowerCase().contains(_searchQuery) || 
+                          p.variants.any((v) => v.variantName.toLowerCase().contains(_searchQuery));
+                }).toList();
 
-          return ListView.separated(
-            padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80),
-            itemCount: products.length,
-            separatorBuilder: (c, i) => const SizedBox(height: 24),
-            itemBuilder: (context, index) {
-               // Render each Product (which contains its variants)
-              return GroupedTeaCard(product: products[index]);
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text("Error: $e")),
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
+                        const SizedBox(height: 16),
+                        const Text("No products found"),
+                      ],
+                    )
+                  );
+                }
+      
+                return ListView.separated(
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 80),
+                  itemCount: filtered.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 24),
+                  itemBuilder: (context, index) {
+                    return GroupedTeaCard(product: filtered[index]);
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Center(child: Text("Error: $e")),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: cartState.totalItems > 0 ? FloatingActionButton.extended(
         onPressed: () {
@@ -218,11 +271,29 @@ class GroupedTeaCard extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Subtotal:", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-                  Text(
-                    "${Constants.currencySymbol}${groupTotal.toStringAsFixed(0)}", 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.royalMaroon)
-                  ),
+                   Row(
+                     children: [
+                       const Icon(Icons.monetization_on, size: 16, color: Colors.orange),
+                       const SizedBox(width: 4),
+                       Text(
+                         "Earn ${(groupTotal / 25).floor()} Coins",
+                         style: const TextStyle(
+                           color: Colors.orange, 
+                           fontWeight: FontWeight.bold, 
+                           fontSize: 12
+                         ),
+                       ),
+                     ],
+                   ),
+                   Row(
+                    children: [
+                      const Text("Subtotal: ", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                      Text(
+                        "${Constants.currencySymbol}${groupTotal.toStringAsFixed(0)}", 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.royalMaroon)
+                      ),
+                    ],
+                   )
                 ],
               )
             ]

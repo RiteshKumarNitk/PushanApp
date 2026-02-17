@@ -1,5 +1,6 @@
 import 'cart_controller.dart';
 import 'cart_page.dart';
+import '../../core/cart_utils.dart'; // Import at top
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -131,6 +132,7 @@ class _ProductPageState extends ConsumerState<ProductPage> {
   }
 }
 
+
 class GroupedTeaCard extends ConsumerWidget {
   final Product product;
   
@@ -144,10 +146,18 @@ class GroupedTeaCard extends ConsumerWidget {
     final cart = ref.watch(cartProvider);
     
     double groupTotal = 0;
+    double totalWeightKg = 0;
+
     for (var v in product.variants) {
-      final qty = cart.items[v.id] ?? 0;
-      groupTotal += v.price * qty;
+      final bags = cart.items[v.id] ?? 0;
+      final pieces = bags * CartUtils.piecesPerBag;
+      final weightPerPiece = CartUtils.parseWeightFromVariant(v.variantName);
+      
+      groupTotal += v.price * pieces;
+      totalWeightKg += weightPerPiece * pieces;
     }
+
+    final int earnedPoints = CartUtils.calculatePoints(totalWeightKg);
 
     return Card(
       elevation: 4,
@@ -190,8 +200,10 @@ class GroupedTeaCard extends ConsumerWidget {
             
             // Variants List
             ...product.variants.map((variant) {
-              final quantity = cart.items[variant.id] ?? 0;
-              final isSelected = quantity > 0;
+              final bags = cart.items[variant.id] ?? 0;
+              final isSelected = bags > 0;
+              final piecePrice = variant.price; // Price per piece
+              final bagPrice = piecePrice * CartUtils.piecesPerBag; // 30 pcs
               
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -217,15 +229,28 @@ class GroupedTeaCard extends ConsumerWidget {
                               color: Colors.blueGrey[800]
                             ),
                           ),
-                          Text(
-                            "${Constants.currencySymbol}${variant.price.toStringAsFixed(0)}",
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                          Row(
+                            children: [
+                              Text(
+                                "₹${piecePrice.toStringAsFixed(0)}/pc",
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                child: Text(
+                                  "Bag: ₹${bagPrice.toStringAsFixed(0)}",
+                                  style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              )
+                            ],
                           ),
                         ],
                       ),
                     ),
                     
-                    // Stepper
+                    // Stepper (Bags)
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -239,22 +264,28 @@ class GroupedTeaCard extends ConsumerWidget {
                         children: [
                           _StepperButton(
                             icon: Icons.remove,
-                            onTap: quantity > 0 
-                              ? () => ref.read(cartProvider.notifier).setQuantity(variant.id, quantity - 1) 
+                            onTap: bags > 0 
+                              ? () => ref.read(cartProvider.notifier).setQuantity(variant.id, bags - 1) 
                               : null,
-                            isEnabled: quantity > 0,
+                            isEnabled: bags > 0,
                           ),
                           SizedBox(
                             width: 32,
-                            child: Text(
-                              "$quantity",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  "$bags",
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                const Text("Bag", style: TextStyle(fontSize: 8, color: Colors.grey)),
+                              ],
                             ),
                           ),
                           _StepperButton(
                             icon: Icons.add,
-                            onTap: () => ref.read(cartProvider.notifier).setQuantity(variant.id, quantity + 1),
+                            onTap: () => ref.read(cartProvider.notifier).setQuantity(variant.id, bags + 1),
                             isEnabled: true,
                           ),
                         ],
@@ -276,7 +307,7 @@ class GroupedTeaCard extends ConsumerWidget {
                        const Icon(Icons.monetization_on, size: 16, color: Colors.orange),
                        const SizedBox(width: 4),
                        Text(
-                         "Earn ${(groupTotal / 25).floor()} Coins",
+                         "Earn $earnedPoints Points",
                          style: const TextStyle(
                            color: Colors.orange, 
                            fontWeight: FontWeight.bold, 
@@ -285,14 +316,15 @@ class GroupedTeaCard extends ConsumerWidget {
                        ),
                      ],
                    ),
-                   Row(
-                    children: [
-                      const Text("Subtotal: ", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-                      Text(
-                        "${Constants.currencySymbol}${groupTotal.toStringAsFixed(0)}", 
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.royalMaroon)
-                      ),
-                    ],
+                   Column(
+                     crossAxisAlignment: CrossAxisAlignment.end,
+                     children: [
+                        const Text("Order Total: ", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500, fontSize: 10)),
+                        Text(
+                          "${Constants.currencySymbol}${groupTotal.toStringAsFixed(0)}", 
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.royalMaroon)
+                        ),
+                     ],
                    )
                 ],
               )

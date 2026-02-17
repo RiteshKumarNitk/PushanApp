@@ -7,6 +7,7 @@ import '../../core/constants.dart';
 import '../../services/invoice_service.dart'; 
 import 'package:printing/printing.dart'; 
 import 'package:pdf/pdf.dart'; 
+import '../../core/cart_utils.dart'; 
 
 final orderDetailProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, orderId) async {
   // Fetch Order + Items + User + Variants + Products
@@ -152,7 +153,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: status == 'approved' || status == 'shipped' || status == 'delivered' ? () async {
+                    onPressed: status == 'in_progress' || status == 'delivered' ? () async {
                       try {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Generating Invoice...")));
                         
@@ -216,47 +217,31 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
         children: [
           Text("Current Status: ${currentStatus.toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          if (currentStatus == 'requested')
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _updateStatus('rejected'),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                    child: const Text("Reject"),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => _updateStatus('approved'),
-                    child: const Text("Approve Order"),
-                  ),
-                ),
-              ],
-            ),
-          if (currentStatus == 'approved')
+          if (currentStatus == 'placed')
             FilledButton(
-              onPressed: () => _updateStatus('packed'),
-              child: const Text("Mark as Packed"),
+              onPressed: () => _updateStatus('in_progress'),
+              child: const Text("Mark as In Progress"),
             ),
-          if (currentStatus == 'packed')
-            FilledButton(
-              onPressed: () => _updateStatus('shipped'),
-              child: const Text("Mark as Shipped"),
-            ),
-          if (currentStatus == 'shipped')
+          if (currentStatus == 'in_progress')
              FilledButton(
               onPressed: () => _updateStatus('delivered'),
               style: FilledButton.styleFrom(backgroundColor: Colors.green),
               child: const Text("Mark as Delivered"),
             ),
+          if (currentStatus == 'delivered')
+             const Center(
+               child: Text(
+                 "Order Completed", 
+                 style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)
+               )
+             ),
         ],
       ),
     );
   }
 
   Future<void> _updateStatus(String newStatus) async {
+    if (_isUpdating) return;
     setState(() => _isUpdating = true);
     try {
       // 1. Update Status
@@ -264,10 +249,13 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
           .from('tea_orders')
           .update({'status': newStatus})
           .eq('id', widget.orderId)
-          .select('user_id')
+          .select('user_id, total_amount')
           .single();
       
       final userId = res['user_id'];
+      
+      // Fetch user profile for supercoins update context if needed
+      // ...
 
       // 2. Send Notification
       await SupabaseConfig.client.from('notifications').insert({
@@ -277,6 +265,50 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
         'type': 'order_update',
         'related_id': widget.orderId,
       });
+
+      // 3. Credit Points if Delivered
+      if (newStatus == 'delivered') {
+          // Calculate Points based on Weight (1 Point = 1 KG)
+          final itemsRes = await SupabaseConfig.client
+              .from('tea_order_items')
+              .select('quantity, unit_price, product_variants!inner(variant_name)')
+              .eq('order_id', widget.orderId);
+          
+          double totalWeight = 0;
+          final List<dynamic> itemsList = itemsRes as List<dynamic>;
+
+          for (var item in itemsList) {
+             final qty = item['quantity'] as int;
+             final variant = item['product_variants'] as Map<String, dynamic>;
+             final vName = variant['variant_name'] as String;
+             totalWeight += qty * CartUtils.parseWeightFromVariant(vName);
+          }
+          
+          final points = CartUtils.calculatePoints(totalWeight);
+          
+          // Get current coins
+          final userRes = await SupabaseConfig.client
+              .from('users')
+              .select('supercoins')
+              .eq('id', userId)
+              .single();
+          
+          final currentCoins = (userRes['supercoins'] as int?) ?? 0;
+          final newCoins = currentCoins + points;
+          
+          // Update user wallet
+          await SupabaseConfig.client
+              .from('users')
+              .update({'supercoins': newCoins})
+              .eq('id', userId);
+
+          // Add transaction history
+          await SupabaseConfig.client.from('supercoin_history').insert({
+              'user_id': userId,
+              'amount': points,
+              'description': 'Order #${widget.orderId.substring(0, 8).toUpperCase()} Delivered',
+          });
+      }
       
       ref.refresh(orderDetailProvider(widget.orderId));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order marked as $newStatus")));

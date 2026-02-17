@@ -9,6 +9,7 @@ import 'product_page.dart';
 import '../../shared/models/product.dart';
 import '../profile/address_book_page.dart'; // Import for provider
 import '../../shared/models/user_address.dart';
+import '../../core/cart_utils.dart';
 
 class CartPage extends ConsumerStatefulWidget {
   const CartPage({super.key});
@@ -64,12 +65,23 @@ class _CartPageState extends ConsumerState<CartPage> {
             }
 
             double estimatedTotal = 0;
+            double totalWeightKg = 0;
+
             for (var e in validCartItems) {
               final variant = variantMap[e.key];
               if (variant != null) {
-                estimatedTotal += variant.price * e.value;
+                final bags = e.value;
+                final pieces = bags * CartUtils.piecesPerBag;
+                final weightPerPiece = CartUtils.parseWeightFromVariant(variant.variantName);
+                
+                estimatedTotal += variant.price * pieces;
+                totalWeightKg += weightPerPiece * pieces;
               }
             }
+            
+            final earnedPoints = CartUtils.calculatePoints(totalWeightKg);
+            final remainingKg = CartUtils.minOrderWeightKg - totalWeightKg;
+            final isMinOrderMet = remainingKg <= 0;
 
             // Supercoin Calculation
             final int availableCoins = (userProfile != null && userProfile['supercoins'] != null) 
@@ -95,6 +107,40 @@ class _CartPageState extends ConsumerState<CartPage> {
             return SingleChildScrollView( 
               child: Column(
                 children: [
+                   // Min Order Progress
+                   Container(
+                     padding: const EdgeInsets.all(16),
+                     color: isMinOrderMet ? Colors.green.shade50 : Colors.orange.shade50,
+                     child: Column(
+                       children: [
+                         Row(
+                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                           children: [
+                             Text(
+                               isMinOrderMet ? "Minimum Order Met!" : "Add ${remainingKg.toStringAsFixed(1)} KG more",
+                               style: TextStyle(
+                                 fontWeight: FontWeight.bold, 
+                                 color: isMinOrderMet ? Colors.green : Colors.deepOrange
+                               )
+                             ),
+                             Text(
+                               "${totalWeightKg.toStringAsFixed(1)} / ${CartUtils.minOrderWeightKg} KG",
+                               style: const TextStyle(fontWeight: FontWeight.bold)
+                             ),
+                           ],
+                         ),
+                         const SizedBox(height: 8),
+                         LinearProgressIndicator(
+                           value: (totalWeightKg / CartUtils.minOrderWeightKg).clamp(0.0, 1.0),
+                           backgroundColor: Colors.grey[200],
+                           color: isMinOrderMet ? Colors.green : Colors.orange,
+                           minHeight: 8,
+                           borderRadius: BorderRadius.circular(4),
+                         ),
+                       ],
+                     ),
+                   ),
+
                   ListView.separated(
                     padding: const EdgeInsets.all(16),
                     shrinkWrap: true,
@@ -105,11 +151,28 @@ class _CartPageState extends ConsumerState<CartPage> {
                       final item = validCartItems[index]; 
                       final v = variantMap[item.key]!; 
                       final p = variantToProductMap[item.key]!;
+                      final bags = item.value;
+                      final pieces = bags * CartUtils.piecesPerBag;
+                      final itemTotal = v.price * pieces;
+
                       return ListTile(
                         leading: _ProductThumbnail(imageUrl: p.imageUrl),
                         title: Text("${p.name} (${v.variantName})"),
-                        subtitle: Text("${Constants.currencySymbol}${v.price.toStringAsFixed(0)} x ${item.value}"),
-                        trailing: Text("${Constants.currencySymbol}${(v.price * item.value).toStringAsFixed(0)}"),
+                        subtitle: Text("$bags Bag(s) x 30 pcs\n₹${v.price.toStringAsFixed(0)}/pc"),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              "${Constants.currencySymbol}${itemTotal.toStringAsFixed(0)}",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            Text(
+                              "${(CartUtils.parseWeightFromVariant(v.variantName) * pieces).toStringAsFixed(1)} KG",
+                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            )
+                          ],
+                        ),
                       );
                     },
                   ),
@@ -291,12 +354,15 @@ class _CartPageState extends ConsumerState<CartPage> {
                         ),
                         const SizedBox(height: 24),
                         FilledButton(
-                          onPressed: _isSubmitting ? null : () => _submitOrder(
+                          onPressed: (_isSubmitting || !isMinOrderMet) ? null : () => _submitOrder(
                             finalTotal, 
                             userProfile?['id'], 
                             variantMap, 
                             validCartItems, 
                             _useSupercoins ? coinsToBurn : 0
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: isMinOrderMet ? AppTheme.royalMaroon : Colors.grey,
                           ),
                           child: _isSubmitting 
                             ? const CircularProgressIndicator(color: Colors.white)
@@ -357,9 +423,11 @@ class _CartPageState extends ConsumerState<CartPage> {
       for (var entry in cartItems) {
         if (!variantMap.containsKey(entry.key)) continue; 
         final variant = variantMap[entry.key]!;
+        final bags = entry.value;
+        final pieces = bags * CartUtils.piecesPerBag;
         itemsList.add({
           'product_id': entry.key,
-          'quantity': entry.value,
+          'quantity': pieces, // Converting Bags to Units (Pieces)
           'unit_price': variant.price,
         });
       }

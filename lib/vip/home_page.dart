@@ -253,8 +253,8 @@ class VipHomePage extends ConsumerWidget {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'DELIVERED': return Colors.green;
-      case 'SHIPPED': return Colors.blue;
-      case 'REQUESTED': return Colors.orange;
+      case 'IN_PROGRESS': return Colors.blue;
+      case 'PLACED': return Colors.orange;
       case 'NO ORDERS': return Colors.grey;
       default: return Colors.black87;
     }

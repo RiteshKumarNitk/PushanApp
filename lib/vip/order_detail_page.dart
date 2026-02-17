@@ -125,7 +125,7 @@ class VipOrderDetailPage extends ConsumerWidget {
                 const SizedBox(height: 32),
 
                 // Download Invoice
-                if (status == 'shipped' || status == 'delivered')
+                if (status == 'in_progress' || status == 'delivered')
                   ElevatedButton.icon(
                     onPressed: () async {
                       try {
@@ -180,11 +180,10 @@ class VipOrderDetailPage extends ConsumerWidget {
   Widget _buildStatusBadge(String status) {
     Color color;
     switch (status) {
-      case 'approved': color = Colors.blue; break;
-      case 'shipped': color = Colors.purple; break;
+      case 'placed': color = Colors.orange; break;
+      case 'in_progress': color = Colors.blue; break;
       case 'delivered': color = Colors.green; break;
-      case 'rejected': color = Colors.red; break;
-      default: color = Colors.orange;
+      default: color = Colors.grey;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

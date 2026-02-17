@@ -22,7 +22,7 @@ class TeaOrder {
   factory TeaOrder.fromJson(Map<String, dynamic> json) {
     return TeaOrder(
       id: json['id'],
-      status: json['status'] ?? 'requested',
+      status: json['status'] ?? 'placed',
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       createdAt: DateTime.parse(json['created_at']).toLocal(),
       adminNotes: json['admin_notes'],

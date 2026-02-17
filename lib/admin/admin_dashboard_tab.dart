@@ -25,10 +25,10 @@ final adminStatsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
 
     if (status == 'delivered') {
       totalRevenue += amount;
-    } else if (['requested', 'approved', 'packed', 'shipped'].contains(status)) {
+    } else if (['placed', 'in_progress'].contains(status)) {
       pendingAmount += amount;
     }
-    if (status == 'requested' || status == 'approved') {
+    if (status == 'placed') {
       pendingCount++;
     }
   }

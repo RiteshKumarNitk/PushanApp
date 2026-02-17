@@ -171,7 +171,7 @@ class _OrderCard extends StatelessWidget {
                    ),
 
                 // Actions
-                if (order.status == 'delivered' || order.status == 'shipped')
+                if (order.status == 'delivered' || order.status == 'in_progress')
                   Padding(
                     padding: const EdgeInsets.only(top: 16.0),
                     child: SizedBox(
@@ -216,26 +216,21 @@ class _OrderCard extends StatelessWidget {
     // delivered -> Step 3 (Active)
     
     int visualStep = 0;
-    // Map DB status to visual steps
-    // Step 0: Placed (requested)
-    // Step 1: Confirmed (approved/packed)
-    // Step 2: Shipped (shipped)
-    // Step 3: Delivered (delivered)
+    // Step 0: Placed
+    // Step 1: In Progress
+    // Step 2: Delivered
 
-    if (order.status == 'approved' || order.status == 'packed') visualStep = 1;
-    if (order.status == 'shipped') visualStep = 2;
-    if (order.status == 'delivered') visualStep = 3;
+    if (order.status == 'in_progress') visualStep = 1;
+    if (order.status == 'delivered') visualStep = 2;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _buildTimelineStep("Placed", visualStep >= 0, isFirst: true),
         _buildTimelineLine(visualStep >= 1),
-        _buildTimelineStep("Confirmed", visualStep >= 1),
+        _buildTimelineStep("In Progress", visualStep >= 1),
         _buildTimelineLine(visualStep >= 2),
-        _buildTimelineStep("Shipped", visualStep >= 2),
-        _buildTimelineLine(visualStep >= 3),
-        _buildTimelineStep("Delivered", visualStep >= 3, isLast: true),
+        _buildTimelineStep("Delivered", visualStep >= 2, isLast: true),
       ],
     );
   }

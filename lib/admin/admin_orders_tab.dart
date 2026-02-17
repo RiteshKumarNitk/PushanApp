@@ -98,7 +98,7 @@ class AdminOrdersTab extends ConsumerWidget {
     final rawTotal = order['total_amount'];
     final total = (rawTotal is num) ? rawTotal.toDouble() : 0.0;
     final date = DateTime.parse(order['created_at']).toLocal();
-    final isPending = status == 'requested';
+    final isPending = status == 'placed';
 
     return InkWell(
       onTap: () {
@@ -175,12 +175,9 @@ class AdminOrdersTab extends ConsumerWidget {
   Widget _buildStatusBadge(String status) {
     Color color;
     switch (status) {
-      case 'requested': color = Colors.orange; break;
-      case 'approved': color = Colors.blue; break;
-      case 'packed': color = Colors.indigo; break;
-      case 'shipped': color = Colors.purple; break;
+      case 'placed': color = Colors.orange; break;
+      case 'in_progress': color = Colors.blue; break;
       case 'delivered': color = Colors.green; break;
-      case 'rejected': color = Colors.red; break;
       default: color = Colors.grey;
     }
 
@@ -200,12 +197,9 @@ class AdminOrdersTab extends ConsumerWidget {
   Color _getStatusColor(String status) {
       // Helper kept if needed, but mostly served by _buildStatusBadge now
     switch (status) {
-      case 'requested': return Colors.orange;
-      case 'approved': return Colors.blue;
-      case 'packed': return Colors.indigo;
-      case 'shipped': return Colors.purple;
+      case 'placed': return Colors.orange;
+      case 'in_progress': return Colors.blue;
       case 'delivered': return Colors.green;
-      case 'rejected': return Colors.red;
       default: return Colors.grey;
     }
   }

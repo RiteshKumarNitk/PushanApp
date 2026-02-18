@@ -6,11 +6,11 @@ import '../../core/constants.dart';
 import '../../shared/screens/chat_screen.dart';
 
 final usersListProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  // Fetch VIP members
+  // Fetch VIP members only (Strict filter to avoid 'vip_member' or 'customer')
   final response = await SupabaseConfig.client
       .from('users')
       .select()
-      .neq('role', 'admin') 
+      .eq('role', 'vip') 
       .order('full_name');
   return List<Map<String, dynamic>>.from(response);
 });

@@ -42,7 +42,7 @@ class _EditProductPageState extends State<EditProductPage> {
         'is_new': false,
         'is_deleted': false, 
       };
-    }).toList();
+    }).toList().cast<Map<String, dynamic>>();
 
     if (_variants.isEmpty) {
        _addVariant(); // Ensure at least one
@@ -51,7 +51,7 @@ class _EditProductPageState extends State<EditProductPage> {
 
   void _addVariant() {
     setState(() {
-      _variants.add({
+      _variants.add(<String, dynamic>{
         'id': null,
         'name': TextEditingController(),
         'price': TextEditingController(),

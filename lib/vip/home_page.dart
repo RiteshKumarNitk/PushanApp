@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../auth/auth_controller.dart';
 import '../../core/app_theme.dart';
 import '../../core/constants.dart';
@@ -11,11 +12,11 @@ import 'product_page.dart'; // For productListProvider
 import '../profile/notifications_page.dart';
 import 'wallet_page.dart';
 
-// Define lastOrderProvider locally or find a better home later
+// --- PROVIDERS (Kept same logic, just cleaner) ---
+
 final lastOrderProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final user = ref.read(userProfileProvider).value;
   if (user == null) return null;
-
   final res = await SupabaseConfig.client
       .from('tea_orders')
       .select()
@@ -23,11 +24,9 @@ final lastOrderProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       .order('created_at', ascending: false)
       .limit(1)
       .maybeSingle();
-      
   return res;
 });
 
-// Provider for Active Announcement
 final activeAnnouncementProvider = StreamProvider<Map<String, dynamic>?>((ref) {
   return SupabaseConfig.client
       .from('announcements')
@@ -37,6 +36,9 @@ final activeAnnouncementProvider = StreamProvider<Map<String, dynamic>?>((ref) {
       .map((data) => data.isNotEmpty ? data.first : null);
 });
 
+
+// --- MAIN WIDGET ---
+
 class VipHomePage extends ConsumerWidget {
   const VipHomePage({super.key});
 
@@ -44,505 +46,514 @@ class VipHomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(userProfileProvider);
     final user = userAsync.value;
-    final hour = DateTime.now().hour;
-    String greeting = "Namaste";
-    if (hour < 12) greeting = "Good Morning";
-    else if (hour < 17) greeting = "Good Afternoon";
-    else greeting = "Good Evening";
-
-    final lastOrderAsync = ref.watch(lastOrderProvider);
     final productsAsync = ref.watch(productListProvider);
     final announcementAsync = ref.watch(activeAnnouncementProvider);
+    
+    // Greeting Logic
+    final hour = DateTime.now().hour;
+    String greeting = "Welcome back,";
+    if (hour < 12) greeting = "Good Morning,";
+    else if (hour < 17) greeting = "Good Afternoon,";
+    else greeting = "Good Evening,";
 
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Soft background
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // --- HEADER ---
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Background Gradient
-                Container(
-                  height: 280, 
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppTheme.royalMaroon, AppTheme.deepGreen],
-                    ),
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-                  ),
-                ),
-                // Decorative Circle
-                Positioned(
-                  top: -50,
-                  right: -50,
-                  child: Container(
-                    width: 200, height: 200,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle),
-                  ),
-                ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // User Info Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(greeting, style: const TextStyle(color: AppTheme.goldAccent, fontSize: 14, fontWeight: FontWeight.bold)),
-                                Text(
-                                  user?['full_name'] ?? 'Guest',
-                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'CormorantGaramond'),
-                                ),
-                              ],
-                            ),
-                          Row(
-                            children: [
-                              _buildChatIcon(context, ref),
-                              const SizedBox(width: 12),
-                              _buildRealNotificationIcon(context, ref),
-                            ],
-                          ),
-                          ],
-                        ),
-                        const SizedBox(height: 30),
-
-                        // Stats Card
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 10)),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Last Order Status
-                              Expanded(
-                                child: lastOrderAsync.when(
-                                  data: (order) {
-                                    final status = order != null ? (order['status'] as String).toUpperCase() : 'NO ORDERS';
-                                    final date = order != null ? DateTime.parse(order['created_at']).toString().split(' ')[0] : '';
-                                    return _buildStatItem("Last Order", status, subtitle: date, color: _getStatusColor(status));
-                                  },
-                                  loading: () => _buildStatItem("Last Order", "Loading..."),
-                                  error: (e,s) => _buildStatItem("Last Order", "Error"),
-                                ),
-                              ),
-                              Container(width: 1, height: 40, color: Colors.grey[200]),
-                              // Supercoins Credit
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () {
-                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletPage()));
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 16),
-                                    child: _buildStatItem(
-                                      "Your Credit", 
-                                      "${user?['supercoins'] ?? 0}", 
-                                      subtitle: "Supercoins",
-                                      color: AppTheme.primaryGreen,
-                                      icon: Icons.monetization_on
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            // --- BODY CONTENT ---
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFFF8F9FA), // Very light grey, modern web app feel
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. HEADER SECTION
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  
-                  // Quick Actions
-                  const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 12),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _buildActionCard(
-                          icon: Icons.add_shopping_cart,
-                          title: "New Request",
-                          subtitle: "Bulk Order",
-                          color: AppTheme.royalMaroon,
-                          onTap: () {
-                             ref.read(vipNavIndexProvider.notifier).state = 1; 
-                          },
-                        ),
+                      Text(
+                        greeting, 
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[600], 
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500
+                        )
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildActionCard(
-                          icon: Icons.history,
-                          title: "Track Order",
-                          subtitle: "Check Status",
-                          color: AppTheme.deepGreen,
-                          onTap: () => ref.read(vipNavIndexProvider.notifier).state = 2,
+                      Text(
+                        user?['full_name'] ?? 'Guest',
+                        style: GoogleFonts.poppins(
+                          fontSize: 24, 
+                          fontWeight: FontWeight.w700, 
+                          color: const Color(0xFF1A1A1A)
                         ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // ACTIVE ANNOUNCEMENT / ADVERTISEMENT
-                  announcementAsync.when(
-                    data: (data) => data != null ? _buildAnnouncementCard(data) : const SizedBox.shrink(),
-                    loading: () => const SizedBox.shrink(),
-                    error: (_,__) => const SizedBox.shrink(),
-                  ),
-
-                  if (announcementAsync.value != null) const SizedBox(height: 24),
-
-                  // Pushan Tea Story / Banner
-                  _buildBrandBanner(),
-
-                  const SizedBox(height: 24),
-
-                  // Featured Products Horizontal List
-                  const Text("Featured Collections", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 180,
-                    child: productsAsync.when(
-                      data: (products) {
-                        return ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: products.length,
-                          separatorBuilder: (c, i) => const SizedBox(width: 16),
-                          itemBuilder: (context, index) => _buildFeaturedProductCard(products[index]),
-                        );
-                      },
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (e, s) => const Center(child: Text("Unable to load collections")),
-                    ),
-                  ),
-                   
-                  const SizedBox(height: 100), // Bottom padding
+                  Row(
+                    children: [
+                      _SupportChatButton(ref: ref),
+                      const SizedBox(width: 12),
+                      _NotificationButton(ref: ref),
+                    ],
+                  )
                 ],
               ),
-            ),
-          ],
+              
+              const SizedBox(height: 32),
+
+              // 2. DASHBOARD CARDS (Wallet & Orders)
+              const _DashboardStatsRow(),
+              
+              const SizedBox(height: 32),
+
+              // 3. ANNOUNCEMENT (Condition Render)
+              announcementAsync.when(
+                data: (data) => data != null ? _ModernAnnouncementCard(data: data) : const SizedBox.shrink(),
+                loading: () => const SizedBox.shrink(),
+                error: (_,__) => const SizedBox.shrink(),
+              ),
+              if (announcementAsync.value != null) const SizedBox(height: 32),
+
+              // 4. QUICK ACTIONS GRID
+              Text(
+                "Quick Actions", 
+                style: GoogleFonts.poppins(
+                  fontSize: 18, 
+                  fontWeight: FontWeight.w600, 
+                  color: const Color(0xFF1A1A1A)
+                )
+              ),
+              const SizedBox(height: 16),
+              const _QuickActionsGrid(),
+
+              const SizedBox(height: 32),
+
+              // 5. FEATURED COLLECTION
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Featured Collection", 
+                    style: GoogleFonts.poppins(
+                      fontSize: 18, 
+                      fontWeight: FontWeight.w600, 
+                      color: const Color(0xFF1A1A1A)
+                    )
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(vipNavIndexProvider.notifier).state = 1, // Go to Catalog
+                    child: Text("View All", style: GoogleFonts.poppins(color: AppTheme.royalMaroon, fontWeight: FontWeight.w600))
+                  )
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 220,
+                child: productsAsync.when(
+                  data: (products) {
+                    if (products.isEmpty) {
+                      return const Center(child: Text("No products featured yet."));
+                    }
+                    return ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: products.length,
+                      separatorBuilder: (c, i) => const SizedBox(width: 20),
+                      itemBuilder: (context, index) => _ModernProductCard(product: products[index]),
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, s) => const Center(child: Text("Unable to load collection")),
+                ),
+              ),
+              
+              const SizedBox(height: 48),
+              
+              // 6. BRAND BANNER (Subtle footer)
+              const _ModernBrandBanner(),
+              const SizedBox(height: 80), // Bottom padding for nav bar
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'DELIVERED': return Colors.green;
-      case 'IN_PROGRESS': return Colors.blue;
-      case 'PLACED': return Colors.orange;
-      case 'NO ORDERS': return Colors.grey;
-      default: return Colors.black87;
-    }
-  }
+// --- SUB-WIDGETS & COMPONENTS ---
 
-  Widget _buildStatItem(String label, String value, {String? subtitle, Color? color, IconData? icon}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+class _DashboardStatsRow extends ConsumerWidget {
+  const _DashboardStatsRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProfileProvider).value;
+    final lastOrderAsync = ref.watch(lastOrderProvider);
+
+    return Row(
       children: [
-        Row(
-          children: [
-            Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w600)),
-            if(icon != null) ...[const SizedBox(width: 4), Icon(icon, size: 14, color: Colors.orange)],
-          ],
+        // Credit Card
+        Expanded(
+          child: GestureDetector(
+             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletPage())),
+             child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A), // Dark elegant card
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Container(
+                     padding: const EdgeInsets.all(8),
+                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+                     child: const Icon(Icons.account_balance_wallet_outlined, color: Colors.white, size: 20),
+                   ),
+                   const SizedBox(height: 16),
+                   Text("Available Credit", style: GoogleFonts.poppins(color: Colors.grey[400], fontSize: 12)),
+                   const SizedBox(height: 4),
+                   Text(
+                     "${user?['supercoins'] ?? 0}", 
+                     style: GoogleFonts.poppins(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w600)
+                   ),
+                   const SizedBox(height: 4),
+                   Text("Supercoins", style: GoogleFonts.poppins(color: AppTheme.goldAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+             ),
+          ),
         ),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: color ?? Colors.black87)),
-        if (subtitle != null)
-        Text(subtitle, style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+        const SizedBox(width: 16),
+        // Last Order Card
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey[100]!),
+              boxShadow: [
+                BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
+              ],
+            ),
+            child: lastOrderAsync.when(
+              data: (order) {
+                final status = order != null ? (order['status'] as String).toUpperCase() : 'NO ORDERS';
+                final date = order != null ? DateTime.parse(order['created_at']).toString().split(' ')[0] : '-';
+                Color statusColor = Colors.grey;
+                if (status == 'DELIVERED') statusColor = Colors.green;
+                else if (status == 'PLACED') statusColor = Colors.orange;
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     Container(
+                       padding: const EdgeInsets.all(8),
+                       decoration: BoxDecoration(color: statusColor.withOpacity(0.1), shape: BoxShape.circle),
+                       child: Icon(Icons.local_shipping_outlined, color: statusColor, size: 20),
+                     ),
+                     const SizedBox(height: 16),
+                     Text("Last Order", style: GoogleFonts.poppins(color: Colors.grey[500], fontSize: 12)),
+                     const SizedBox(height: 4),
+                     Text(
+                       status, 
+                       maxLines: 1,
+                       overflow: TextOverflow.ellipsis,
+                       style: GoogleFonts.poppins(color: const Color(0xFF1A1A1A), fontSize: 18, fontWeight: FontWeight.w600)
+                     ),
+                     const SizedBox(height: 4),
+                     Text(date, style: GoogleFonts.poppins(color: Colors.grey[400], fontSize: 11)),
+                  ],
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_,__) => const Center(child: Icon(Icons.error_outline, color: Colors.grey)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickActionsGrid extends ConsumerWidget {
+  const _QuickActionsGrid();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      children: [
+        _buildActionBtn(
+          context, 
+          icon: Icons.add_shopping_cart, 
+          label: "New Order", 
+          color: AppTheme.royalMaroon,
+          onTap: () => ref.read(vipNavIndexProvider.notifier).state = 1
+        ),
+        const SizedBox(width: 16),
+        _buildActionBtn(
+          context, 
+          icon: Icons.inventory_2_outlined, 
+          label: "Track", 
+          color: AppTheme.deepGreen,
+          onTap: () => ref.read(vipNavIndexProvider.notifier).state = 2
+        ),
+        const SizedBox(width: 16),
+        _buildActionBtn(
+          context, 
+          icon: Icons.support_agent, 
+          label: "Support", 
+          color: Colors.orange,
+          onTap: () async {
+            // Re-using the robust chat logic
+            try {
+               final res = await SupabaseConfig.client.from('users').select().eq('role', 'admin').limit(1).maybeSingle();
+               if (res != null && context.mounted) {
+                 Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+                   otherUserId: res['id'], 
+                   otherUserName: res['full_name'] ?? 'Support Admin'
+                 )));
+               } else {
+                 if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Support offline")));
+               }
+             } catch (e) { /* ignore */ }
+          }
+        ),
       ],
     );
   }
 
-  Widget _buildAnnouncementCard(Map<String, dynamic> data) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        // Vibrant gradient for ads
-        gradient: const LinearGradient(colors: [Colors.orange, Colors.redAccent]),
+  Widget _buildActionBtn(BuildContext context, {required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey[100]!),
+            boxShadow: [
+              BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+            ]
+          ),
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                child: const Text("SPECIAL OFFER", style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-              const Spacer(),
-              const Icon(Icons.local_offer, color: Colors.white, size: 20),
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 12),
+              Text(label, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: const Color(0xFF1A1A1A))),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            data['title'] ?? 'Special Announcement',
-            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            data['message'] ?? 'Check out our latest offers!',
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBrandBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.royalMaroon,
-        borderRadius: BorderRadius.circular(16),
-        image: const DecorationImage(
-           image: NetworkImage("https://images.unsplash.com/photo-1594631230802-325a3310110c?auto=format&fit=crop&q=80&w=1000"),
-           fit: BoxFit.cover,
-           opacity: 0.2, 
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Pushan Tea Legacy", style: TextStyle(color: AppTheme.goldAccent, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text(
-            "Experience the finest\nhand-picked tea leaves.",
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'CormorantGaramond'),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppTheme.royalMaroon,
-              textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8)
-            ),
-            child: const Text("Read Our Story"),
-          )
-        ],
-      ),
     );
   }
+}
 
-  Widget _buildFeaturedProductCard(dynamic product) {
-    // Assuming product object structure
+class _ModernProductCard extends StatelessWidget {
+  final dynamic product;
+  const _ModernProductCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: 140,
+      width: 160,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.network(
-                (product.imageUrl != null && product.imageUrl.isNotEmpty) ? product.imageUrl : Constants.defaultTeaImage,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                errorBuilder: (c,e,s) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)),
+            flex: 3,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                image: DecorationImage(
+                  image: NetworkImage((product.imageUrl != null && product.imageUrl.isNotEmpty) ? product.imageUrl : Constants.defaultTeaImage),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(product.category ?? 'Premium Tea', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
-              ],
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    product.category?.toUpperCase() ?? 'TEA', 
+                    style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w600, letterSpacing: 0.5)
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    product.name, 
+                    maxLines: 2, 
+                    overflow: TextOverflow.ellipsis, 
+                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A))
+                  ),
+                ],
+              ),
             ),
-          )
+          ),
         ],
       ),
     );
   }
+}
 
+class _ModernAnnouncementCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _ModernAnnouncementCard({required this.data});
 
-
-  Widget _buildActionCard({
-    required IconData icon, 
-    required String title, 
-    required String subtitle, 
-    required Color color, 
-    required VoidCallback onTap
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(height: 16),
-            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-          ],
-        ),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFFFF9966), Color(0xFFFF5E62)]),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: const Color(0xFFFF5E62).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+            child: Text("NEW OFFER", style: GoogleFonts.poppins(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 16),
+          Text(data['title'] ?? 'Announcement', style: GoogleFonts.poppins(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(data['message'] ?? '', style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.9), fontSize: 14)),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildSupportBanner(BuildContext context) {
-    return InkWell(
-      onTap: () async {
-         try {
-           final res = await SupabaseConfig.client.from('users').select().eq('role', 'admin').limit(1).single();
-           final adminId = res['id'];
-           final adminName = res['full_name'];
-           
-           if(context.mounted) {
-             Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(otherUserId: adminId, otherUserName: adminName ?? 'Admin')));
-           }
-         } catch (e) {
-           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Support currently offline")));
-         }
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [AppTheme.goldAccent, Colors.orange.shade300]),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), shape: BoxShape.circle),
-              child: const Icon(Icons.headset_mic, color: Colors.white),
+class _ModernBrandBanner extends StatelessWidget {
+  const _ModernBrandBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFEFEF),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Pushan Tea Legacy", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A))),
+                const SizedBox(height: 8),
+                Text("Experience the finest hand-picked tea leaves from our gardens.", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              ],
             ),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Need Help?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text("Chat with our tea experts", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-          ],
-        ),
+          ),
+          const SizedBox(width: 16),
+          const Icon(Icons.verified, color: Colors.grey, size: 32),
+        ],
       ),
     );
   }
+}
 
+// --- BUTTONS ---
 
-  Widget _buildChatIcon(BuildContext context, WidgetRef ref) {
+class _SupportChatButton extends ConsumerWidget {
+  final WidgetRef ref;
+  const _SupportChatButton({required this.ref});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final unreadAsync = ref.watch(unreadMessageCountProvider);
-
     return InkWell(
       onTap: () async {
          try {
-           final res = await SupabaseConfig.client.from('users').select().eq('role', 'admin').limit(1).single();
-           if(context.mounted) {
-             Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(otherUserId: res['id'], otherUserName: res['full_name'] ?? 'Admin')));
+           final res = await SupabaseConfig.client
+               .from('users')
+               .select()
+               .eq('role', 'admin')
+               .limit(1)
+               .maybeSingle(); // ROBUST FETCH
+           
+           if (res != null && context.mounted) {
+             Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+               otherUserId: res['id'], 
+               otherUserName: res['full_name'] ?? 'Support Admin'
+             )));
+           } else {
+             if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Support unavailable")));
            }
          } catch (e) { /* ignore */ }
       },
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1), 
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!)
         ),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 24),
+            const Icon(Icons.support_agent, color: Color(0xFF1A1A1A), size: 24),
             unreadAsync.when(
               data: (count) {
                 if (count == 0) return const SizedBox.shrink();
                 return Positioned(
-                  right: -2,
-                  top: -2,
+                  top: -2, right: -2,
                   child: Container(
-                    padding: const EdgeInsets.all(4),
+                    width: 8, height: 8,
                     decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Center(child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
                   ),
                 );
               },
               loading: () => const SizedBox.shrink(),
               error: (_,__) => const SizedBox.shrink(),
-            ),
+            )
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildRealNotificationIcon(BuildContext context, WidgetRef ref) {
+class _NotificationButton extends ConsumerWidget {
+  final WidgetRef ref;
+  const _NotificationButton({required this.ref});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
-      onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
-      },
-      borderRadius: BorderRadius.circular(20),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage())),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!)
         ),
-        child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+        child: const Icon(Icons.notifications_outlined, color: Color(0xFF1A1A1A), size: 24),
       ),
     );
   }

@@ -60,8 +60,38 @@ class AuthGate extends ConsumerWidget {
 
               if (role == 'admin') {
                 return const AdminDashboardRoot();
+              } else if (role == 'vip_member' || role == 'vip') {
+                return const VipBottomNav(); 
               } else {
-                return const VipBottomNav(); // Reverted to Original UI
+                 return Scaffold(
+                   body: Center(
+                     child: Padding(
+                       padding: const EdgeInsets.all(32.0),
+                       child: Column(
+                         mainAxisAlignment: MainAxisAlignment.center,
+                         children: [
+                           const Icon(Icons.lock_outline, size: 60, color: Colors.grey),
+                           const SizedBox(height: 16),
+                           const Text(
+                             "Access Restricted",
+                             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                           ),
+                           const SizedBox(height: 8),
+                           const Text(
+                             "This application is for VIP Members only. Please contact the administrator to upgrade your account.",
+                             textAlign: TextAlign.center,
+                             style: TextStyle(color: Colors.grey),
+                           ),
+                           const SizedBox(height: 24),
+                           OutlinedButton(
+                             onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+                             child: const Text("Sign Out"),
+                           )
+                         ],
+                       ),
+                     ),
+                   ),
+                 );
               }
             },
             loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),

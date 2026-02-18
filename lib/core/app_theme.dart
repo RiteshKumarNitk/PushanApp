@@ -12,35 +12,29 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: creamBg,
+      scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       colorScheme: ColorScheme.fromSeed(
         seedColor: royalMaroon,
-        background: creamBg,
+        background: const Color(0xFFF8F9FA),
         surface: Colors.white,
         primary: royalMaroon,
-        secondary: deepGreen,
+        secondary: deepGreen, 
         tertiary: goldAccent,
       ),
-      textTheme: GoogleFonts.cormorantGaramondTextTheme().apply(
+      textTheme: GoogleFonts.poppinsTextTheme().apply(
         bodyColor: textDark,
         displayColor: royalMaroon,
-      ).copyWith(
-        titleLarge: GoogleFonts.cormorantGaramond(
-          fontWeight: FontWeight.bold, 
-          fontSize: 28,
-        ),
-        bodyMedium: GoogleFonts.lato(fontSize: 16),
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: creamBg,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        iconTheme: IconThemeData(color: royalMaroon),
-        titleTextStyle: TextStyle(
-          color: royalMaroon,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'CormorantGaramond',
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: textDark),
+        titleTextStyle: GoogleFonts.poppins(
+          color: textDark,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -48,20 +42,22 @@ class AppTheme {
           backgroundColor: royalMaroon,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          textStyle: const TextStyle(
-            fontSize: 18, 
-            fontWeight: FontWeight.bold,
+          textStyle: GoogleFonts.poppins(
+            fontSize: 16, 
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
       cardTheme: CardThemeData(
         color: Colors.white,
-        elevation: 4,
-        shadowColor: royalMaroon.withOpacity(0.2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+        ),
         margin: EdgeInsets.zero,
       ),
       inputDecorationTheme: InputDecorationTheme(

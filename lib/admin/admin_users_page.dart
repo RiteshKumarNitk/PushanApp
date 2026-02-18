@@ -33,7 +33,10 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     try {
       final users = await _authService.getAllUsers();
       setState(() {
-        _users = users;
+        _users = users.where((u) {
+          final r = (u['role'] ?? '').toString().toLowerCase();
+          return r == 'admin' || r == 'vip'; // Only show Admin and VIP
+        }).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -63,7 +66,11 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
       _emailController.text = user['email'] ?? '';
       _nameController.text = user['full_name'] ?? '';
       _phoneController.text = user['phone'] ?? '';
-      _selectedRole = user['role'] ?? 'customer';
+      final r = (user['role'] ?? 'customer').toString().toLowerCase();
+      // Safe map to valid dropdown values
+      if (r == 'admin') _selectedRole = 'admin';
+      else if (r == 'vip') _selectedRole = 'vip'; 
+      else _selectedRole = 'vip'; // default fallback for this view if we only manage VIPs
     } else {
       _emailController.clear();
       _passwordController.clear();
@@ -77,122 +84,142 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
       _selectedRole = 'vip';
     }
 
+    // Local state for visibility is handled by StatefulBuilder
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isEdit ? "Edit User Details" : "Create New User", style: TextStyle(color: AppTheme.primaryGreen)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: SizedBox(
-          width: 400, // Limit width for better look
-          child: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildSectionTitle("Basic Info"),
-                  if (!isEdit) ...[
-                     TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email)),
-                      validator: (v) => v!.isEmpty ? "Required" : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: "Password", prefixIcon: Icon(Icons.lock)),
-                      validator: (v) => v!.isEmpty ? "Required" : null,
-                    ),
-                  ] else 
-                     TextFormField(
-                      initialValue: user['email'],
-                      decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email), filled: true),
-                      readOnly: true,
-                    ),
-                  
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: "Full Name", prefixIcon: Icon(Icons.person)),
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _phoneController,
-                    decoration: const InputDecoration(labelText: "Phone", prefixIcon: Icon(Icons.phone)),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: _selectedRole,
-                    decoration: const InputDecoration(labelText: "System Role", prefixIcon: Icon(Icons.admin_panel_settings)),
-                    items: const [
-                       DropdownMenuItem(value: 'customer', child: Text("Customer")),
-                       DropdownMenuItem(value: 'vip', child: Text("VIP Member")),
-                       DropdownMenuItem(value: 'admin', child: Text("Administrator")),
-                    ],
-                    onChanged: (val) => setState(() => _selectedRole = val),
-                  ),
-                  
-                  if (!isEdit) ...[
-                    const SizedBox(height: 20),
-                     _buildSectionTitle("Address (Optional)"),
-                    TextFormField(controller: _addressLineController, decoration: const InputDecoration(labelText: "Address Line")),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Expanded(child: TextFormField(controller: _cityController, decoration: const InputDecoration(labelText: "City"))),
-                      const SizedBox(width: 10),
-                      Expanded(child: TextFormField(controller: _stateController, decoration: const InputDecoration(labelText: "State"))),
-                    ]),
-                    const SizedBox(height: 10),
-                    TextFormField(controller: _zipCodeController, decoration: const InputDecoration(labelText: "Zip Code")),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryGreen, foregroundColor: Colors.white),
-            onPressed: () async {
-               if (_formKey.currentState!.validate()) {
-                 Navigator.pop(context); // Close immediately
-                 
-                 // Show loading indicator
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Processing...')));
+      builder: (context) {
+        bool isObscure = true;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(isEdit ? "Edit User Details" : "Create New User", style: TextStyle(color: AppTheme.primaryGreen)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              content: SizedBox(
+                width: 400, // Limit width for better look
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildSectionTitle("Basic Info"),
+                        // Email Field
+                        if (!isEdit)
+                          TextFormField(
+                            controller: _emailController,
+                            decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email)),
+                            validator: (v) => v!.isEmpty ? "Required" : null,
+                          )
+                        else 
+                          TextFormField(
+                            initialValue: user['email'],
+                            decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email), filled: true),
+                            readOnly: true,
+                          ),
+                        
+                        const SizedBox(height: 10),
 
-                 try {
-                   if (isEdit) {
-                     await _authService.updateUser(
-                       user['id'],
-                       fullName: _nameController.text.trim(),
-                       phone: _phoneController.text.trim(),
-                       role: _selectedRole,
-                     );
-                   } else {
-                      await ref.read(authControllerProvider.notifier).createVipUser(
-                        email: _emailController.text.trim(),
-                        password: _passwordController.text.trim(),
-                        fullName: _nameController.text.trim(),
-                        phone: _phoneController.text.trim(),
-                        addressLine: _addressLineController.text.trim(),
-                        city: _cityController.text.trim(),
-                        addressState: _stateController.text.trim(),
-                        zipCode: _zipCodeController.text.trim(),
-                      );
-                   }
-                   _loadUsers(); // Refresh
-                 } catch (e) {
-                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                 }
-               }
-            },
-            child: Text(isEdit ? "Update User" : "Create User"),
-          ),
-        ],
-      ),
+                        // Password Field
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: isObscure,
+                          decoration: InputDecoration(
+                            labelText: isEdit ? "New Password (Optional)" : "Password", 
+                            prefixIcon: const Icon(Icons.lock),
+                            suffixIcon: IconButton(
+                              icon: Icon(isObscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                              onPressed: () => setState(() => isObscure = !isObscure),
+                            ),
+                            helperText: isEdit ? "Leave blank to keep current" : null
+                          ),
+                          validator: isEdit ? null : (v) => v!.isEmpty ? "Required" : null,
+                        ),
+                        
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(labelText: "Full Name", prefixIcon: Icon(Icons.person)),
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _phoneController,
+                          decoration: const InputDecoration(labelText: "Phone", prefixIcon: Icon(Icons.phone)),
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          value: _selectedRole,
+                          decoration: const InputDecoration(labelText: "System Role", prefixIcon: Icon(Icons.admin_panel_settings)),
+                          items: const [
+                             DropdownMenuItem(value: 'vip', child: Text("VIP Member")),
+                             DropdownMenuItem(value: 'admin', child: Text("Administrator")),
+                          ],
+                          onChanged: (val) => setState(() => _selectedRole = val),
+                        ),
+                        
+                        if (!isEdit) ...[
+                          const SizedBox(height: 20),
+                           _buildSectionTitle("Address (Optional)"),
+                          TextFormField(controller: _addressLineController, decoration: const InputDecoration(labelText: "Address Line")),
+                          const SizedBox(height: 10),
+                          Row(children: [
+                            Expanded(child: TextFormField(controller: _cityController, decoration: const InputDecoration(labelText: "City"))),
+                            const SizedBox(width: 10),
+                            Expanded(child: TextFormField(controller: _stateController, decoration: const InputDecoration(labelText: "State"))),
+                          ]),
+                          const SizedBox(height: 10),
+                          TextFormField(controller: _zipCodeController, decoration: const InputDecoration(labelText: "Zip Code")),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryGreen, foregroundColor: Colors.white),
+                  onPressed: () async {
+                     if (_formKey.currentState!.validate()) {
+                       Navigator.pop(context); // Close immediately
+                       
+                       // Show loading indicator
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Processing...')));
+
+                       try {
+                         if (isEdit) {
+                           await _authService.updateUser(
+                             user['id'],
+                             fullName: _nameController.text.trim(),
+                             phone: _phoneController.text.trim(),
+                             role: _selectedRole,
+                             password: _passwordController.text.trim(), // Added password update
+                           );
+                         } else {
+                            await ref.read(authControllerProvider.notifier).createVipUser(
+                              email: _emailController.text.trim(),
+                              password: _passwordController.text.trim(),
+                              fullName: _nameController.text.trim(),
+                              phone: _phoneController.text.trim(),
+                              addressLine: _addressLineController.text.trim(),
+                              city: _cityController.text.trim(),
+                              addressState: _stateController.text.trim(),
+                              zipCode: _zipCodeController.text.trim(),
+                            );
+                         }
+                         _loadUsers(); // Refresh
+                       } catch (e) {
+                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                       }
+                     }
+                  },
+                  child: Text(isEdit ? "Update User" : "Create User"),
+                ),
+              ],
+            );
+          }
+        );
+      }
     );
   }
 
@@ -270,9 +297,10 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final user = _users[index];
-                      final role = (user['role'] ?? 'customer').toString().toUpperCase();
-                      final isVip = role == 'VIP';
-                      final isAdmin = role == 'ADMIN';
+                      // Display Logic - assume 'vip' if not 'admin' since we filtered
+                      final roleStr = (user['role'] ?? 'vip').toString().toLowerCase();
+                      final isAdmin = roleStr == 'admin';
+                      final isVip = !isAdmin; // Simplified for this view
                       
                       return Container(
                         decoration: BoxDecoration(
@@ -337,7 +365,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                                       borderRadius: BorderRadius.circular(12)
                                     ),
                                     child: Text(
-                                      role, 
+                                      isAdmin ? "ADMIN" : "VIP", 
                                       style: TextStyle(
                                         fontSize: 10, 
                                         fontWeight: FontWeight.bold, 

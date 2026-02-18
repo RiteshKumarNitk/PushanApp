@@ -24,16 +24,16 @@ final productListProvider = FutureProvider<List<Product>>((ref) async {
     final products = data.map((e) => Product.fromJson(e)).toList();
     
     if (products.isEmpty) {
-      debugPrint("DB returned 0 products. Using Mocks.");
-      return [...mockTeaProducts];
+      debugPrint("DB returned 0 products. Showing empty state.");
+      return [];
     }
     
     return products;
 
   } catch (e) {
     debugPrint("Error fetching/parsing products: $e");
-    // Fallback to mocks on ANY error
-    return [...mockTeaProducts];
+    // Fallback on error - show empty or handle gracefully
+    return [];
   }
 });
 
